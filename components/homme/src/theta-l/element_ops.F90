@@ -91,6 +91,7 @@ contains
     case ('gradpottemp_j','gradTh_j');    call get_gradpottemp_j(elem,field,hvcoord,nt,ntQ)
     case ('gradpottemp_k','gradTh_k');    call get_gradpottemp_k(elem,field,hvcoord,nt,ntQ)
     case ('phi','geo');       call get_phi(elem,field,phi_i,hvcoord,nt,ntQ)
+    case ('phi_i');       call get_phi_i(elem,field,hvcoord,nt,ntQ)
     case ('dpnh_dp');         call get_dpnh_dp(elem,field,hvcoord,nt,ntQ)
     case ('pnh');             call get_nonhydro_pressure(elem,field,tmp  ,hvcoord,nt,ntQ)
     case ('exner');           call get_nonhydro_pressure(elem,tmp  ,field,hvcoord,nt,ntQ)
@@ -119,7 +120,7 @@ contains
     case ('w');
 
       if(theta_hydrostatic_mode) then
-        call get_field(elem,'omega',omega,hvcoord,nt,ntQ)
+        call get_field(elem,'omega',omega,hvcoord,nt,ntQ) !Bug needs to be fixed. Averaging
         call get_field(elem,'rho'  ,rho  ,hvcoord,nt,ntQ)
         field = -omega/(rho *g)
 
@@ -452,6 +453,41 @@ contains
   end subroutine
 
        
+  subroutine get_phi_i(elem,phi_i,hvcoord,nt,ntQ)
+    implicit none
+    
+    type (element_t),       intent(in)  :: elem
+    type (hvcoord_t),       intent(in)  :: hvcoord
+    real (kind=real_kind),  intent(out) :: phi_i(np,np,nlevp)
+    integer,                intent(in)  :: nt
+    integer,                intent(in)  :: ntQ
+    
+    real (kind=real_kind), dimension(np,np,nlev) :: dp
+    real (kind=real_kind) :: pnh(np,np,nlev)
+    real (kind=real_kind) :: exner(np,np,nlev)
+    real (kind=real_kind) :: temp(np,np,nlev)
+    real (kind=real_kind) :: dpnh_dp_i(np,np,nlevp)
+    integer :: k
+
+    phi_i = elem%state%phinh_i(:,:,:,nt)
+
+    if(theta_hydrostatic_mode) then
+       do k=1,nlev
+          dp(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
+               (hvcoord%hybi(k+1)-hvcoord%hybi(k))*elem%state%ps_v(:,:,nt)
+       enddo
+       
+       call get_pnh_and_exner(hvcoord,elem%state%vtheta_dp(:,:,:,nt),&
+            dp,elem%state%phinh_i(:,:,:,nt),pnh,exner,dpnh_dp_i)
+
+       ! traditional Hydrostatic integral
+       do k=nlev,1,-1
+          temp(:,:,k) = Rgas*elem%state%vtheta_dp(:,:,k,nt)*exner(:,:,k)/pnh(:,:,k)
+          phi_i(:,:,k)=phi_i(:,:,k+1)+temp(:,:,k)
+       enddo
+    endif
+
+  end subroutine
 
 
 

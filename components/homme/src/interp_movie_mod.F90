@@ -54,8 +54,9 @@ module interp_movie_mod
                                                  'geos     ', &
                                                  'precl    ', &
                                                  'zeta     ', &
-                                                 'zeta_i   ', & !JRUB added
-                                                 'zeta_j   ', & !JRUB added
+                                                 'vort3D   ', &
+                                                 'gradTh   ', &
+                                                 'ertelpv  ', &
                                                  'dp3d     ', &
                                                  'p        ', &
                                                  'pnh      ', &
@@ -63,9 +64,6 @@ module interp_movie_mod
                                                  'div      ', &
                                                  'T        ', &
                                                  'Th       ', &
-                                                 'gradTh_i ', &  !JRUB
-                                                 'gradTh_j ', &  !JRUB
-                                                 'gradTh_k ', &  !JRUB
                                                  'u        ', &
                                                  'v        ', &
                                                  'w        ', &
@@ -127,8 +125,8 @@ module interp_movie_mod
        1,2,0,0,0,  &   ! geos
        1,2,5,0,0,  &   ! precl
        1,2,3,5,0,  &   ! zeta
-       1,2,3,5,0,  &   ! zeta_i, JRUB added
-       1,2,3,5,0,  &   ! zeta_j, RUB added
+       1,2,3,5,0,  &   ! vort3d
+       1,2,3,5,0,  &   ! gradTh
        1,2,3,5,0,  &   ! dp3d
        1,2,3,5,0,  &   ! p
        1,2,3,5,0,  &   ! pnh
@@ -136,9 +134,6 @@ module interp_movie_mod
        1,2,3,5,0,  &   ! div
        1,2,3,5,0,  &   ! T
        1,2,3,5,0,  &   ! Th
-       1,2,3,5,0,  &   ! gradTh_i  JRUB added
-       1,2,3,5,0,  &   ! gradTh_j  JRUB added
-       1,2,3,5,0,  &   ! gradTh_k  JRUB added
        1,2,3,5,0,  &   ! u
        1,2,3,5,0,  &   ! v
        1,2,3,5,0,  &   ! w
@@ -330,6 +325,9 @@ contains
     call nf_variable_attributes(ncdf, 'u',    'longitudinal wind component','meters/second')
     call nf_variable_attributes(ncdf, 'v',    'latitudinal wind component','meters/second')
     call nf_variable_attributes(ncdf, 'zeta', 'Relative vorticity-vertical component','1/s')
+    call nf_variable_attributes(ncdf, 'vort3D', 'Relative vorticity-zonal component','1/s')
+    call nf_variable_attributes(ncdf, 'gradTh', 'Relative vorticity-zonal component','K/m')
+    call nf_variable_attributes(ncdf, 'ertelpv', 'Relative vorticity-zonal component','K/ms')
     call nf_variable_attributes(ncdf, 'zeta_i', 'Relative vorticity-zonal component','1/s')
     call nf_variable_attributes(ncdf, 'zeta_j', 'Relative vorticity-meridional component','1/s')
 #if defined(_PRIM)
@@ -338,7 +336,6 @@ contains
     call nf_variable_attributes(ncdf, 'precl','Precipitation rate','meters of water/s')
     call nf_variable_attributes(ncdf, 'T',    'Temperature','degrees kelvin')
     call nf_variable_attributes(ncdf, 'Th',    'Potential Temperature','degrees kelvin')
-    call nf_variable_attributes(ncdf, 'gradTh_i','grad Th -zonal component','K/m')
     call nf_variable_attributes(ncdf, 'dp3d', 'delta p','Pa')
     call nf_variable_attributes(ncdf, 'p',    'hydrostatic pressure','Pa')
     call nf_variable_attributes(ncdf, 'pnh',  'total pressure','Pa')
@@ -465,7 +462,9 @@ contains
     real(kind=real_kind), allocatable :: datall(:,:), var3d(:,:,:,:)
     real(kind=real_kind), allocatable :: varvtmp(:,:,:,:), ulatlon(:,:,:,:,:)
     real(kind=real_kind)  :: temp3d(np,np,nlev)    
-
+    real(kind=real_kind)  :: phi_i(np,np,nlevp,nelemd)
+    real(kind=real_kind)  :: w(np,np,nlev,nelemd)
+    real(kind=real_kind)  :: pottemp(np,np,nlev,nelemd)    
     integer :: st, en
 
     integer :: ierr
@@ -549,6 +548,58 @@ contains
                 enddo
                 call nf_put_var(ncdf(ios),datall,start3d, count3d, name='zeta')
                 deallocate(datall, var3d)
+             end if
+
+             !balu this needs to be checked for correctness
+             if(nf_selectedvar('vort3D', output_varnames)) then
+#ifdef V_IS_LATLON
+                if (par%masterproc) print *,'writing vort3D...'
+                allocate(datall(ncnt,nlev))
+                allocate(ulatlon(np,np,3,nlev,nelemd))
+                do ie=1,nelemd
+                   call get_field(elem(ie),'w',w(:,:,:,ie),hvcoord,n0,n0_Q)
+                   call get_field(elem(ie),'phi_i',phi_i(:,:,:,ie),hvcoord,n0,n0_Q)
+                enddo
+
+                call compute_vort3D_C0(ulatlon,w,phi_i,elem,par,n0)
+                st=1
+                do ie=1,nelemd
+                   en=st+interpdata(ie)%n_interp-1
+                   call interpolate_vector(interpdata(ie), elem(ie), &
+                        ulatlon(:,:,:,:,ie), &
+                        np, nlev, datall(st:en,:))
+                   st=st+interpdata(ie)%n_interp
+                enddo
+                call nf_put_var(ncdf(ios),datall,start3d, 3*count3d, name='vort3D')
+
+                deallocate(datall, ulatlon)
+#endif
+             end if
+
+             !balu this needs to be checked for correctness
+             if(nf_selectedvar('gradTh', output_varnames)) then
+#ifdef V_IS_LATLON
+                if (par%masterproc) print *,'writing gradTh...'
+                allocate(datall(ncnt,nlev))
+                allocate(ulatlon(np,np,3,nlev,nelemd))
+                do ie=1,nelemd
+                   call get_field(elem(ie),'pottemp',pottemp(:,:,:,ie),hvcoord,n0,n0_Q)
+                   call get_field(elem(ie),'phi_i',phi_i(:,:,:,ie),hvcoord,n0,n0_Q)
+                enddo
+
+                call compute_grad3D_C0(ulatlon,pottemp,phi_i,elem,par,n0)
+                st=1
+                do ie=1,nelemd
+                   en=st+interpdata(ie)%n_interp-1
+                   call interpolate_vector(interpdata(ie), elem(ie), &
+                        ulatlon(:,:,:,:,ie), &
+                        np, nlev, datall(st:en,:))
+                   st=st+interpdata(ie)%n_interp
+                enddo
+                call nf_put_var(ncdf(ios),datall,start3d, 3*count3d, name='vort3D')
+
+                deallocate(datall, ulatlon)
+#endif
              end if
 
              !begin writing zetai JRUB
@@ -956,6 +1007,8 @@ contains
                 allocate(datall(ncnt,nlev),var3d(np,np,nlev,1))  ! np,np,nlev,3(1) JRUB
                 !call derivinit(deriv)
                 do ie=1,nelemd
+                   ! per MT call get_field(pottemp) then call gradient. Go out of ie loop and call make_C0
+                   call get_field(elem(ie),'pottemp',temp3d,hvcoord,n0,n0_Q)
                    !call get_field(elem(ie),'gradpottemp_i',temp3d,hvcoord,n0,n0_Q)
                    call get_gradpottemp_i(elem(ie),temp3d,hvcoord,n0,n0_Q, par)
                    en=st+interpdata(ie)%n_interp-1
