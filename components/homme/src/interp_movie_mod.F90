@@ -48,7 +48,7 @@ module interp_movie_mod
 #undef V_IS_LATLON
 #if defined(_PRIM)
 #define V_IS_LATLON
-  integer, parameter :: varcnt = 47 !was 42, JRUB added 2
+  integer, parameter :: varcnt = 47 !was 42, JRUB added 5 ! balu added another 2
   integer, parameter :: maxdims =  5
   character*(*), parameter :: varnames(varcnt)=(/'ps       ', &
                                                  'geos     ', &
@@ -56,7 +56,6 @@ module interp_movie_mod
                                                  'zeta     ', &
                                                  'vort3D   ', &
                                                  'gradTh   ', &
-                                                 'ertelpv  ', &
                                                  'dp3d     ', &
                                                  'p        ', &
                                                  'pnh      ', &
@@ -95,27 +94,24 @@ module interp_movie_mod
                                                  'hyai     ', &
                                                  'hybi     ', &
                                                  'time     '/)
-  integer, parameter :: vartype(varcnt)=(/PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,& !JRUB added 1
-                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double, &   !JRUB added 1
-                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double, PIO_double,& !JRUB added 1
-                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double, PIO_double,& !JRUB added 2
+  integer, parameter :: vartype(varcnt)=(/PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
+                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
+                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
+                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
+                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
+                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
+                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
+                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
                                           PIO_double,PIO_double,PIO_double,PIO_double,&
-                                          PIO_double,PIO_double,PIO_double,PIO_double,&
-                                          PIO_double,&
-                                          PIO_double,PIO_double,&
-                                          PIO_double,&
-                                          PIO_double,PIO_double,PIO_double,PIO_double,&
-                                          PIO_double,PIO_double,PIO_double,&
-                                          PIO_double,PIO_double,&
-                                          PIO_double,PIO_double,&
-                                          PIO_double/)
-  logical, parameter :: varrequired(varcnt)=(/.false.,.false.,.false.,.false.,.false.,.false.,.false.,.false.,&  !JRUB added 2
-                                              .false.,.false.,.false., .false., .false.,.false.,.false., .false.,& !JRUB added 4
+                                       /)
+  logical, parameter :: varrequired(varcnt)=(/.false.,.false.,.false.,.false.,.false.,&
                                               .false.,.false.,.false.,.false.,.false.,&
                                               .false.,.false.,.false.,.false.,.false.,&
                                               .false.,.false.,.false.,.false.,.false.,&
                                               .false.,.false.,.false.,.false.,.false.,&
-                                              .false.,.true. ,.true. ,&
+                                              .false.,.false.,.false.,.false.,.false.,&
+                                              .false.,.false.,.false.,.false.,&
+                                              .true. ,.true. ,&
                                               .true.,.true. ,.true. ,&   ! gw,lev,ilev
                                               .true. ,.true. ,&   ! hy arrays
                                               .true. ,.true. ,&   ! hy arrays
@@ -440,7 +436,7 @@ contains
     use pio, only : pio_setdebuglevel, pio_syncfile ! _EXTERNAL
 
     use viscosity_mod, only : compute_zeta_C0, make_c0, compute_zeta_c0_contra,&
-                              compute_div_c0,compute_div_c0_contra , compute_zeta_i_C0, compute_zeta_j_C0 !JRUBadded compute_zeta_[i-j]_C0
+                              compute_div_c0,compute_div_c0_contra, compute_vort3D_C0, compute_grad3D_C0
     use perf_mod, only : t_startf, t_stopf ! _EXTERNAL
     use time_mod   , only : TimeLevel_Qdp
     ! ---------------------
@@ -562,16 +558,17 @@ contains
                 enddo
 
                 call compute_vort3D_C0(ulatlon,w,phi_i,elem,par,n0)
-                st=1
-                do ie=1,nelemd
-                   en=st+interpdata(ie)%n_interp-1
-                   call interpolate_vector(interpdata(ie), elem(ie), &
-                        ulatlon(:,:,:,:,ie), &
-                        np, nlev, datall(st:en,:))
-                   st=st+interpdata(ie)%n_interp
+                do i=1,3
+                   st=1
+                   do ie=1,nelemd
+                      en=st+interpdata(ie)%n_interp-1
+                      call interpolate_scalar(interpdata(ie)), &
+                           ulatlon(:,:,i,:,ie), &
+                           np, nlev, datall(st:en,:))
+                      st=st+interpdata(ie)%n_interp
+                   enddo
+                   call nf_put_var(ncdf(ios),datall,start3d, count3d, name='vort3D')
                 enddo
-                call nf_put_var(ncdf(ios),datall,start3d, 3*count3d, name='vort3D')
-
                 deallocate(datall, ulatlon)
 #endif
              end if
@@ -588,16 +585,17 @@ contains
                 enddo
 
                 call compute_grad3D_C0(ulatlon,pottemp,phi_i,elem,par,n0)
-                st=1
-                do ie=1,nelemd
-                   en=st+interpdata(ie)%n_interp-1
-                   call interpolate_vector(interpdata(ie), elem(ie), &
-                        ulatlon(:,:,:,:,ie), &
-                        np, nlev, datall(st:en,:))
-                   st=st+interpdata(ie)%n_interp
+                do i=1,3
+                   st=1
+                   do ie=1,nelemd
+                      en=st+interpdata(ie)%n_interp-1
+                      call interpolate_vector(interpdata(ie), elem(ie), &
+                           ulatlon(:,:,i,:,ie), &
+                           np, nlev, datall(st:en,:))
+                      st=st+interpdata(ie)%n_interp
+                   enddo
+                   call nf_put_var(ncdf(ios),datall,start3d, count3d, name='grad3D')
                 enddo
-                call nf_put_var(ncdf(ios),datall,start3d, 3*count3d, name='vort3D')
-
                 deallocate(datall, ulatlon)
 #endif
              end if

@@ -6,7 +6,7 @@
 module derivative_mod_base
 
   use kinds,          only : real_kind, longdouble_kind
-  use dimensions_mod, only : np, nelemd, nlev
+  use dimensions_mod, only : np, nelemd, nlev, nlevp
   use quadrature_mod, only : quadrature_t, gauss, gausslobatto,legendre, jacobi
   use parallel_mod,   only : abortmp
   use element_mod,    only : element_t
@@ -784,7 +784,7 @@ contains
  
     end function curl_sphere
 
-  function vorticity3D_sphere(v, w, phi_i, deriv, elem) result(vort)
+  function vorticity3D_sphere(v, w, phi_i, deriv, elem) result(vort3d)
 !   input: v = horizontal velocity in lat-lon coordinates 
 !   input w:  scalar  (assumed to be  w khat) at cell centers (average before calling)
 !   output  spherical vorticity vector (3 components) in lat-lon coordinates
@@ -795,7 +795,7 @@ contains
     real(kind=real_kind), intent(in) :: w(np,np,nlev)
     real(kind=real_kind), intent(in) :: phi_i(np,np,nlev)
 
-    real(kind=real_kind), intent(out) :: vort(np,np,3,nlev)
+    real(kind=real_kind) :: vort3d(np,np,3,nlev)
 
 !   local
     real(kind=real_kind) :: v_i(np,np,2,nlevp)
@@ -805,8 +805,8 @@ contains
 
 !   horizontal derivatives at cell centers
     do k=1,nlev
-       vort(:,:,3,k) = vorticity_sphere(v(:,:,:,k),deriv,elem) ! at cell centers
-       vort(:,:,1:2,k) = curl_sphere(w(:,:,k),deriv,elem) ! at cell centers as well!
+       vort3d(:,:,3,k) = vorticity_sphere(v(:,:,:,k),deriv,elem) ! at cell centers
+       vort3d(:,:,1:2,k) = curl_sphere(w(:,:,k),deriv,elem) ! at cell centers as well!
     enddo
 
 !   now add in the vertical derivatives
@@ -815,14 +815,14 @@ contains
     v_i(:,:,:,nlevp) = v(:,:,:,nlev)
 
     do k=2,nlev
-       v_i(:,:,:,k) =  (v(:,:,:,k-1) + v(:,:,:,k) ) / 2
+       v_i(:,:,:,k) = (v(:,:,:,k-1) + v(:,:,:,k) ) / 2
     enddo
 
 !   vertical derivatives at cell centers
     do k=1,nlev
        dz(:,:) = (phi_i(:,:,k+1)-phi_i(:,:,k))/g
-       vort(:,:,1,k) = vort(:,:,1,k) - ( v_i(:,:,2,k+1) - v_i(:,:,2,k) ) / dz(:,:)
-       vort(:,:,2,k) = vort(:,:,2,k) + ( v_i(:,:,1,k+1) - v_i(:,:,1,k) ) / dz(:,:)
+       vort3d(:,:,1,k) = vort3d(:,:,1,k) - ( v_i(:,:,2,k+1) - v_i(:,:,2,k) ) / dz(:,:)
+       vort3d(:,:,2,k) = vort3d(:,:,2,k) + ( v_i(:,:,1,k+1) - v_i(:,:,1,k) ) / dz(:,:)
     enddo
     end function vorticity3D_sphere
 
@@ -837,11 +837,13 @@ function gradient3D_sphere(theta,phi_i,deriv,elem) result(grad)
   real(kind=real_kind), intent(in) :: theta(np,np,nlev)
   real(kind=real_kind), intent(in) :: phi_i(np,np,nlev)
 
-  real(kind=real_kind), intent(out) :: grad(np,np,3,nlev)
+  real(kind=real_kind) :: grad(np,np,3,nlev)
 
 ! local
   real(kind=real_kind) :: theta_i(np,np,nlevp)
   real(kind=real_kind) :: dz(np,np)
+
+  integer :: k
 
   do k=1,nlev
      grad(:,:,1:2,k) = gradient_sphere(theta(:,:,k),deriv,elem%Dinv) 
@@ -851,7 +853,7 @@ function gradient3D_sphere(theta,phi_i,deriv,elem) result(grad)
   theta_i(:,:,1) = theta(:,:,1)
   theta_i(:,:,nlevp) = theta(:,:,nlev)
   do k=2,nlev
-     theta_i(:,:,:,k) =  (theta(:,:,:,k-1) + theta(:,:,:,k) ) / 2
+     theta_i(:,:,k) =  (theta(:,:,k-1) + theta(:,:,k) ) / 2
   enddo
 
 ! vertical derivatives at cell centers
@@ -859,7 +861,7 @@ function gradient3D_sphere(theta,phi_i,deriv,elem) result(grad)
      dz(:,:) = (phi_i(:,:,k+1)-phi_i(:,:,k))/g
      grad(:,:,3,k)  = (theta_i(:,:,k+1) - theta_i(:,:,k) )/dz(:,:)
   enddo
-
+end function gradient3D_sphere
 !--------------------------------------------------------------------------
 
 
