@@ -547,7 +547,7 @@ contains
              !balu this needs to be checked for correctness
              if(nf_selectedvar('vort3D', output_varnames)) then
 #ifdef V_IS_LATLON
-                if (par%masterproc) print *,'writing vort3D...'
+                if (par%masterproc) print *,'writing vort3D...JRUB'
                 allocate(datall(ncnt,nlev))
                 allocate(ulatlon(np,np,3,nlev,nelemd))
                 do ie=1,nelemd
