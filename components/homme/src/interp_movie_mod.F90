@@ -592,7 +592,7 @@ contains
                            np, nlev, datall(st:en,:))
                       st=st+interpdata(ie)%n_interp
                    enddo
-                   call nf_put_var(ncdf(ios),datall,start3d, count3d, name='grad3D')
+                   call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh')
                 enddo
                 deallocate(datall, ulatlon)
 #endif
