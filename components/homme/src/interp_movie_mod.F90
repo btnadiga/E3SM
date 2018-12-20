@@ -4,7 +4,7 @@
 
 module interp_movie_mod
   use kinds, only : real_kind
-  use dimensions_mod, only :  nlev, nelemd, np, ne, qsize
+  use dimensions_mod, only :  nlev, nlevp, nelemd, np, ne, qsize
   use interpolate_mod, only : interpolate_t, setup_latlon_interp, interpdata_t, &
        get_interp_parameter, get_interp_lat, get_interp_lon, interpolate_scalar, interpolate_vector, &
        set_interp_parameter
@@ -48,7 +48,7 @@ module interp_movie_mod
 #undef V_IS_LATLON
 #if defined(_PRIM)
 #define V_IS_LATLON
-  integer, parameter :: varcnt = 47 !was 42, JRUB added 5 ! balu added another 2
+  integer, parameter :: varcnt = 44
   integer, parameter :: maxdims =  5
   character*(*), parameter :: varnames(varcnt)=(/'ps       ', &
                                                  'geos     ', &
@@ -102,7 +102,7 @@ module interp_movie_mod
                                           PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
                                           PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
                                           PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
-                                          PIO_double,PIO_double,PIO_double,PIO_double,&
+                                          PIO_double,PIO_double,PIO_double,PIO_double&
                                        /)
   logical, parameter :: varrequired(varcnt)=(/.false.,.false.,.false.,.false.,.false.,&
                                               .false.,.false.,.false.,.false.,.false.,&
@@ -324,8 +324,6 @@ contains
     call nf_variable_attributes(ncdf, 'vort3D', 'Relative vorticity-zonal component','1/s')
     call nf_variable_attributes(ncdf, 'gradTh', 'Relative vorticity-zonal component','K/m')
     call nf_variable_attributes(ncdf, 'ertelpv', 'Relative vorticity-zonal component','K/ms')
-    call nf_variable_attributes(ncdf, 'zeta_i', 'Relative vorticity-zonal component','1/s')
-    call nf_variable_attributes(ncdf, 'zeta_j', 'Relative vorticity-meridional component','1/s')
 #if defined(_PRIM)
     call nf_variable_attributes(ncdf, 'geo',  'Geopotential','m^2/s^2')
     call nf_variable_attributes(ncdf, 'geos', 'Surface geopotential','m^2/s^2')
@@ -562,7 +560,7 @@ contains
                    st=1
                    do ie=1,nelemd
                       en=st+interpdata(ie)%n_interp-1
-                      call interpolate_scalar(interpdata(ie)), &
+                      call interpolate_scalar(interpdata(ie), &
                            ulatlon(:,:,i,:,ie), &
                            np, nlev, datall(st:en,:))
                       st=st+interpdata(ie)%n_interp
@@ -589,7 +587,7 @@ contains
                    st=1
                    do ie=1,nelemd
                       en=st+interpdata(ie)%n_interp-1
-                      call interpolate_vector(interpdata(ie), elem(ie), &
+                      call interpolate_scalar(interpdata(ie), &
                            ulatlon(:,:,i,:,ie), &
                            np, nlev, datall(st:en,:))
                       st=st+interpdata(ie)%n_interp
@@ -599,54 +597,6 @@ contains
                 deallocate(datall, ulatlon)
 #endif
              end if
-
-             !begin writing zetai JRUB
-             if(nf_selectedvar('zeta_i', output_varnames)) then
-#ifdef V_IS_LATLON
-                if (par%masterproc) print *,'writing zeta_i...'
-                allocate(datall(ncnt,nlev))
-                allocate(var3d(np,np,nlev,nelemd))
-                ! velocities are on sphere for primitive equations
-                !print *,'JRUB using zeta_C0' !This seems to be what is used 
-                call compute_zeta_i_C0(var3d,elem,par,n0, hvcoord)
-                !call compute_zeta_C0(var3d,elem,par,n0)
-                st=1
-                do ie=1,nelemd
-                   en=st+interpdata(ie)%n_interp-1
-                   call interpolate_scalar(interpdata(ie), var3d(:,:,:,ie), &
-                        np, nlev, datall(st:en,:))
-                   st=st+interpdata(ie)%n_interp
-                enddo
-                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='zeta_i')
-
-                deallocate(datall, var3d)
-#endif
-             end if
-             !end writing zetai JRUB
-
-             !begin writing zeta_j JRUB
-             if(nf_selectedvar('zeta_j', output_varnames)) then
-#ifdef V_IS_LATLON
-                if (par%masterproc) print *,'writing zeta_j...'
-                allocate(datall(ncnt,nlev))
-                allocate(var3d(np,np,nlev,nelemd))
-                ! velocities are on sphere for primitive equations
-                !print *,'JRUB using zeta_C0' !This seems to be what is used 
-                call compute_zeta_j_C0(var3d,elem,par,n0)
-                !call compute_zeta_C0(var3d,elem,par,n0)
-                st=1
-                do ie=1,nelemd
-                   en=st+interpdata(ie)%n_interp-1
-                   call interpolate_scalar(interpdata(ie), var3d(:,:,:,ie), &
-                        np, nlev, datall(st:en,:))
-                   st=st+interpdata(ie)%n_interp
-                enddo
-                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='zeta_j')
-
-                deallocate(datall, var3d)
-#endif
-             end if
-             !end writing zeta_j JRUB
 
              if(nf_selectedvar('div', output_varnames)) then
                 if (par%masterproc) print *,'writing div...'
@@ -997,64 +947,6 @@ contains
                 call nf_put_var(ncdf(ios),datall,start3d, count3d, name='Th')
                 deallocate(datall,var3d)
              end if
-             
-             !JRUB output grad-Theta 
-             if(nf_selectedvar('gradTh_i', output_varnames)) then
-                if (par%masterproc) print *,'writing gradTh_i...'
-                st=1
-                allocate(datall(ncnt,nlev),var3d(np,np,nlev,1))  ! np,np,nlev,3(1) JRUB
-                !call derivinit(deriv)
-                do ie=1,nelemd
-                   ! per MT call get_field(pottemp) then call gradient. Go out of ie loop and call make_C0
-                   call get_field(elem(ie),'pottemp',temp3d,hvcoord,n0,n0_Q)
-                   !call get_field(elem(ie),'gradpottemp_i',temp3d,hvcoord,n0,n0_Q)
-                   call get_gradpottemp_i(elem(ie),temp3d,hvcoord,n0,n0_Q, par)
-                   en=st+interpdata(ie)%n_interp-1
-                   call interpolate_scalar(interpdata(ie), temp3d, &
-                        np, nlev, datall(st:en,:))
-                   st=st+interpdata(ie)%n_interp
-                end do
-                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_i')
-                deallocate(datall,var3d)
-             end if
-             !JRUB
-
-             !JRUB output grad-Theta needs a lot more work
-             if(nf_selectedvar('gradTh_j', output_varnames)) then
-                if (par%masterproc) print *,'writing gradTh_j...'
-                st=1
-                allocate(datall(ncnt,nlev),var3d(np,np,nlev,1))  ! np,np,nlev,3(1) JRUB
-                !call derivinit(deriv)
-                do ie=1,nelemd
-                   !call get_field(elem(ie),'gradpottemp_j',temp3d,hvcoord,n0,n0_Q)
-                   call get_gradpottemp_j(elem(ie),temp3d,hvcoord,n0,n0_Q, par)
-                   en=st+interpdata(ie)%n_interp-1
-                   call interpolate_scalar(interpdata(ie), temp3d, &
-                        np, nlev, datall(st:en,:))
-                   st=st+interpdata(ie)%n_interp
-                end do
-                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_j')
-                deallocate(datall,var3d)
-             end if
-             !JRUB
-
-             !JRUB output grad-Theta k
-             if(nf_selectedvar('gradTh_k', output_varnames)) then
-                if (par%masterproc) print *,'writing gradTh_k...'
-                st=1
-                allocate(datall(ncnt,nlev),var3d(np,np,nlev,1))  ! np,np,nlev,3(1) JRUB
-                !call derivinit(deriv)
-                do ie=1,nelemd
-                   call get_field(elem(ie),'gradpottemp_k',temp3d,hvcoord,n0,n0_Q)
-                   en=st+interpdata(ie)%n_interp-1
-                   call interpolate_scalar(interpdata(ie), temp3d, &
-                        np, nlev, datall(st:en,:))
-                   st=st+interpdata(ie)%n_interp
-                end do
-                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_k')
-                deallocate(datall,var3d)
-             end if
-             !JRUB
 
              do qindex=1,min(qsize,5)
                 write(vname,'(a1,i1)') 'Q',qindex

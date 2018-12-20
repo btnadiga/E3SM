@@ -14,7 +14,7 @@ module derivative_mod_base
   use physical_constants, only : rrearth, g !JRUB g
 
 implicit none
-private
+!private
 
   type, public :: derivative_t
      real (kind=real_kind) :: Dvv(np,np)

@@ -397,33 +397,7 @@ subroutine compute_grad3D_C0_par(zeta,w,phi_i,elem,par,nt)
 
 end subroutine compute_grad3D_C0_par
 
-subroutine compute_zeta_i_C0_par(zeta,elem,par,nt)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! JRUB added for i-component ofrelative vorticity
-! compute C0 vorticity.  That is, solve:  
-!     < PHI, zeta > = <PHI, curl(elem%state%v >
-!
-!    input:  v (stored in elem()%, in lat-lon coordinates)
-!    output: zeta(:,:,:,:)   
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-type (parallel_t) :: par
-type (element_t)     , intent(in), target :: elem(:)
-real (kind=real_kind), dimension(np,np,nlev,nelemd) :: zeta
-integer :: nt
 
-! local
-type (hybrid_t)              :: hybrid
-integer :: k,i,j,ie,ic
-type (derivative_t)          :: deriv
-
-! single thread
-hybrid = hybrid_create(par,0,1)
-
-call compute_zeta_i_C0_hybrid(zeta,elem,hybrid,1,nelemd,nt)
-!call compute_zeta_C0_hybrid(zeta,elem,hybrid,1,nelemd,nt)
-
-end subroutine
 
 
 
@@ -442,33 +416,7 @@ end subroutine
 
 
 
-subroutine compute_zeta_j_C0_par(zeta,elem,par,nt)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! JRUB added for j-component ofrelative vorticity
-! compute C0 vorticity.  That is, solve:  
-!     < PHI, zeta > = <PHI, curl(elem%state%v >
-!
-!    input:  v (stored in elem()%, in lat-lon coordinates)
-!    output: zeta(:,:,:,:)   
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-type (parallel_t) :: par
-type (element_t)     , intent(in), target :: elem(:)
-real (kind=real_kind), dimension(np,np,nlev,nelemd) :: zeta
-integer :: nt
 
-! local
-type (hybrid_t)              :: hybrid
-integer :: k,i,j,ie,ic
-type (derivative_t)          :: deriv
-
-! single thread
-hybrid = hybrid_create(par,0,1)
-
-call compute_zeta_j_C0_hybrid(zeta,elem,hybrid,1,nelemd,nt)
-!call compute_zeta_C0_hybrid(zeta,elem,hybrid,1,nelemd,nt)
-
-end subroutine
  
 
 subroutine compute_div_C0_par(zeta,elem,par,nt)

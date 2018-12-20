@@ -31,7 +31,7 @@ module derivative_mod
       laplace_sphere_wk,          &
       divergence_sphere_wk,       &
       gradient_sphere,            &
-      divergence_sphere
+      divergence_sphere, vorticity3D_sphere, gradient3D_sphere
 
   implicit none
 

@@ -94,12 +94,8 @@ contains
     if (steptype==0) then   
 
        ! Leapfrog timestep: u(np1) = u(nm1) + dt2*DSS [ RHS(u(n0)) ]
-<<<<<<< Updated upstream
-       call compute_and_apply_rhs(np1,nm1,n0,dt2,real_time,edge3,elem,pmean,hybrid,deriv,vtens,ptens,nets,nete)
-=======
        call compute_and_apply_rhs(np1,nm1,n0,dt2,real_time,edge3,elem,pmean,hybrid,deriv,vtens,ptens,nets,nete) !JRUB
        !call compute_and_apply_rhs_power(np1,nm1,n0,dt2,nstep,real_time,edge3,elem,pmean,hybrid,deriv,vtens,ptens,nets,nete)  !JRUB
->>>>>>> Stashed changes
 
        ! ====================================================
        ! apply viscosity  
@@ -1084,8 +1080,6 @@ contains
 #if (defined HORIZ_OPENMP)
   !$OMP BARRIER
 #endif
-<<<<<<< Updated upstream
-=======
 
   do ie=nets,nete
      rspheremp     => elem(ie)%rspheremp
@@ -1263,7 +1257,6 @@ contains
      call edgeVpack(edge3,vtens(1,1,1,1,ie),2*nlev,kptr,ie)
   end do
   
->>>>>>> Stashed changes
   
   do ie=nets,nete
      rspheremp     => elem(ie)%rspheremp
@@ -1310,7 +1303,7 @@ contains
      endif
   end do
   call t_stopf('compute_and_apply_rhs')
-  end subroutine compute_and_apply_rhs
+end subroutine compute_and_apply_rhs_power
   
 
 
