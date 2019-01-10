@@ -48,14 +48,17 @@ module interp_movie_mod
 #undef V_IS_LATLON
 #if defined(_PRIM)
 #define V_IS_LATLON
-  integer, parameter :: varcnt = 44
+  integer, parameter :: varcnt = 47
   integer, parameter :: maxdims =  5
   character*(*), parameter :: varnames(varcnt)=(/'ps       ', &
                                                  'geos     ', &
                                                  'precl    ', &
                                                  'zeta     ', &
-                                                 'vort3D   ', &
-                                                 'gradTh   ', &
+                                                 'zeta_x   ', &
+                                                 'zeta_y   ', &
+                                                 'gradTh_x   ', &
+                                                 'gradTh_y   ', &
+                                                 'gradTh_z   ', &
                                                  'dp3d     ', &
                                                  'p        ', &
                                                  'pnh      ', &
@@ -94,6 +97,7 @@ module interp_movie_mod
                                                  'hyai     ', &
                                                  'hybi     ', &
                                                  'time     '/)
+
   integer, parameter :: vartype(varcnt)=(/PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
                                           PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
                                           PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
@@ -102,7 +106,8 @@ module interp_movie_mod
                                           PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
                                           PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
                                           PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
-                                          PIO_double,PIO_double,PIO_double,PIO_double&
+                                          PIO_double,PIO_double,PIO_double,PIO_double,PIO_double,&
+                                          PIO_double,PIO_double&
                                        /)
   logical, parameter :: varrequired(varcnt)=(/.false.,.false.,.false.,.false.,.false.,&
                                               .false.,.false.,.false.,.false.,.false.,&
@@ -110,19 +115,22 @@ module interp_movie_mod
                                               .false.,.false.,.false.,.false.,.false.,&
                                               .false.,.false.,.false.,.false.,.false.,&
                                               .false.,.false.,.false.,.false.,.false.,&
-                                              .false.,.false.,.false.,.false.,&
-                                              .true. ,.true. ,&
+                                              .false.,.false.,.false.,.false.,.false.,&
+                                              .false.,.false.,.true. ,.true. ,&
                                               .true.,.true. ,.true. ,&   ! gw,lev,ilev
                                               .true. ,.true. ,&   ! hy arrays
                                               .true. ,.true. ,&   ! hy arrays
-                                              .true./)
+                                              .true./)     ! time
 
   integer, parameter :: vardims(maxdims,varcnt) =  reshape( (/ 1,2,5,0,0,  &
        1,2,0,0,0,  &   ! geos
        1,2,5,0,0,  &   ! precl
        1,2,3,5,0,  &   ! zeta
-       1,2,3,5,0,  &   ! vort3d
-       1,2,3,5,0,  &   ! gradTh
+       1,2,3,5,0,  &   ! zeta_X
+       1,2,3,5,0,  &   ! zeta_y
+       1,2,3,5,0,  &   ! gradTh_x
+       1,2,3,5,0,  &   ! gradTh_y
+       1,2,3,5,0,  &   ! gradTh_z
        1,2,3,5,0,  &   ! dp3d
        1,2,3,5,0,  &   ! p
        1,2,3,5,0,  &   ! pnh
@@ -160,7 +168,7 @@ module interp_movie_mod
        3,0,0,0,0,  &   ! hybm
        4,0,0,0,0,  &   ! hyai
        4,0,0,0,0,  &   ! hybi
-       5,0,0,0,0 /),&
+       5,0,0,0,0/),&  
        shape=(/maxdims,varcnt/))
 
   character*(*),parameter::dimnames(maxdims)=(/'lon ','lat ','lev ','ilev','time'/)  
@@ -321,8 +329,11 @@ contains
     call nf_variable_attributes(ncdf, 'u',    'longitudinal wind component','meters/second')
     call nf_variable_attributes(ncdf, 'v',    'latitudinal wind component','meters/second')
     call nf_variable_attributes(ncdf, 'zeta', 'Relative vorticity-vertical component','1/s')
-    call nf_variable_attributes(ncdf, 'vort3D', 'Relative vorticity-zonal component','1/s')
-    call nf_variable_attributes(ncdf, 'gradTh', 'Relative vorticity-zonal component','K/m')
+    call nf_variable_attributes(ncdf, 'zeta_x', 'Relative vorticity-zonal component','1/s')
+    call nf_variable_attributes(ncdf, 'zeta_y', 'Relative vorticity-meridional component','1/s')
+    call nf_variable_attributes(ncdf, 'gradTh_x', 'Pot. Temperature gradient-zonal component','K/m')
+    call nf_variable_attributes(ncdf, 'gradTh_y', 'Pot. Temperature gradient-meridionalonal component','K/m')
+    call nf_variable_attributes(ncdf, 'gradTh_z', 'Pot. Temperature gradient-vertical component','K/m')
     call nf_variable_attributes(ncdf, 'ertelpv', 'Relative vorticity-zonal component','K/ms')
 #if defined(_PRIM)
     call nf_variable_attributes(ncdf, 'geo',  'Geopotential','m^2/s^2')
@@ -527,7 +538,7 @@ contains
                 allocate(var3d(np,np,nlev,nelemd))
 #ifdef V_IS_LATLON
                 ! velocities are on sphere for primitive equations
-                !print *,'JRUB using zeta_C0' !This seems to be what is used 
+                !'JRUB using zeta_C0' !This seems to be what is used 
                 call compute_zeta_C0(var3d,elem,par,n0)
 #else
                 print *,'JRUB using zeta_C0_contra'
@@ -545,36 +556,65 @@ contains
              end if
 
              !balu this needs to be checked for correctness
-             if(nf_selectedvar('vort3D', output_varnames)) then
+             if(nf_selectedvar('zeta_x', output_varnames)) then
 #ifdef V_IS_LATLON
-                if (par%masterproc) print *,'writing vort3D...JRUB'
+                if (par%masterproc) print *,'writing zeta_x...'
                 allocate(datall(ncnt,nlev))
                 allocate(ulatlon(np,np,3,nlev,nelemd))
+                !allocate(ulatlon(np,np,3,nlev,nelemd))
                 do ie=1,nelemd
                    call get_field(elem(ie),'w',w(:,:,:,ie),hvcoord,n0,n0_Q)
                    call get_field(elem(ie),'phi_i',phi_i(:,:,:,ie),hvcoord,n0,n0_Q)
                 enddo
 
                 call compute_vort3D_C0(ulatlon,w,phi_i,elem,par,n0)
-                do i=1,3
-                   st=1
-                   do ie=1,nelemd
-                      en=st+interpdata(ie)%n_interp-1
-                      call interpolate_scalar(interpdata(ie), &
-                           ulatlon(:,:,i,:,ie), &
-                           np, nlev, datall(st:en,:))
-                      st=st+interpdata(ie)%n_interp
-                   enddo
-                   call nf_put_var(ncdf(ios),datall,start3d, count3d, name='vort3D')
+                !do i=1,3
+                st=1
+                do ie=1,nelemd
+                   en=st+interpdata(ie)%n_interp-1
+                   call interpolate_scalar(interpdata(ie), &
+                        ulatlon(:,:,1,:,ie), &
+                        np, nlev, datall(st:en,:))
+                   st=st+interpdata(ie)%n_interp
                 enddo
+                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='zeta_x')
+                !enddo
                 deallocate(datall, ulatlon)
 #endif
              end if
 
-             !balu this needs to be checked for correctness
-             if(nf_selectedvar('gradTh', output_varnames)) then
+             if(nf_selectedvar('zeta_y', output_varnames)) then
 #ifdef V_IS_LATLON
-                if (par%masterproc) print *,'writing gradTh...'
+                if (par%masterproc) print *,'writing zeta_y...'
+                allocate(datall(ncnt,nlev))
+                allocate(ulatlon(np,np,3,nlev,nelemd))
+                !allocate(ulatlon(np,np,3,nlev,nelemd))
+                do ie=1,nelemd
+                   call get_field(elem(ie),'w',w(:,:,:,ie),hvcoord,n0,n0_Q)
+                   call get_field(elem(ie),'phi_i',phi_i(:,:,:,ie),hvcoord,n0,n0_Q)
+                enddo
+
+                call compute_vort3D_C0(ulatlon,w,phi_i,elem,par,n0)
+                !do i=1,3
+                st=1
+                do ie=1,nelemd
+                   en=st+interpdata(ie)%n_interp-1
+                   call interpolate_scalar(interpdata(ie), &
+                        ulatlon(:,:,2,:,ie), &
+                        np, nlev, datall(st:en,:))
+                   st=st+interpdata(ie)%n_interp
+                enddo
+                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='zeta_y')
+                !enddo
+                deallocate(datall, ulatlon)
+#endif
+             end if
+
+
+             !balu this needs to be checked for correctness
+             if(nf_selectedvar('gradTh_x', output_varnames)) then
+#ifdef V_IS_LATLON
+                if (par%masterproc) print *,'writing gradTh_x...'
                 allocate(datall(ncnt,nlev))
                 allocate(ulatlon(np,np,3,nlev,nelemd))
                 do ie=1,nelemd
@@ -583,20 +623,76 @@ contains
                 enddo
 
                 call compute_grad3D_C0(ulatlon,pottemp,phi_i,elem,par,n0)
-                do i=1,3
-                   st=1
-                   do ie=1,nelemd
-                      en=st+interpdata(ie)%n_interp-1
-                      call interpolate_scalar(interpdata(ie), &
-                           ulatlon(:,:,i,:,ie), &
-                           np, nlev, datall(st:en,:))
-                      st=st+interpdata(ie)%n_interp
-                   enddo
-                   call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh')
+
+                st=1
+                do ie=1,nelemd
+                   en=st+interpdata(ie)%n_interp-1
+                   call interpolate_scalar(interpdata(ie), &
+                        ulatlon(:,:,1,:,ie), &
+                        np, nlev, datall(st:en,:))
+                   st=st+interpdata(ie)%n_interp
                 enddo
+                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_x')
+
                 deallocate(datall, ulatlon)
 #endif
              end if
+
+             !balu this needs to be checked for correctness
+             if(nf_selectedvar('gradTh_y', output_varnames)) then
+#ifdef V_IS_LATLON
+                if (par%masterproc) print *,'writing gradTh_y...'
+                allocate(datall(ncnt,nlev))
+                allocate(ulatlon(np,np,3,nlev,nelemd))
+                do ie=1,nelemd
+                   call get_field(elem(ie),'pottemp',pottemp(:,:,:,ie),hvcoord,n0,n0_Q)
+                   call get_field(elem(ie),'phi_i',phi_i(:,:,:,ie),hvcoord,n0,n0_Q)
+                enddo
+
+                call compute_grad3D_C0(ulatlon,pottemp,phi_i,elem,par,n0)
+
+                st=1
+                do ie=1,nelemd
+                   en=st+interpdata(ie)%n_interp-1
+                   call interpolate_scalar(interpdata(ie), &
+                        ulatlon(:,:,2,:,ie), &
+                        np, nlev, datall(st:en,:))
+                   st=st+interpdata(ie)%n_interp
+                enddo
+                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_y')
+
+                deallocate(datall, ulatlon)
+#endif
+             end if
+
+             !balu this needs to be checked for correctness
+             if(nf_selectedvar('gradTh_z', output_varnames)) then
+#ifdef V_IS_LATLON
+                if (par%masterproc) print *,'writing gradTh_z...'
+                allocate(datall(ncnt,nlev))
+                allocate(ulatlon(np,np,3,nlev,nelemd))
+                do ie=1,nelemd
+                   call get_field(elem(ie),'pottemp',pottemp(:,:,:,ie),hvcoord,n0,n0_Q)
+                   call get_field(elem(ie),'phi_i',phi_i(:,:,:,ie),hvcoord,n0,n0_Q)
+                enddo
+
+                call compute_grad3D_C0(ulatlon,pottemp,phi_i,elem,par,n0)
+
+                st=1
+                do ie=1,nelemd
+                   en=st+interpdata(ie)%n_interp-1
+                   call interpolate_scalar(interpdata(ie), &
+                        ulatlon(:,:,3,:,ie), &
+                        np, nlev, datall(st:en,:))
+                   st=st+interpdata(ie)%n_interp
+                enddo
+                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_z')
+
+                deallocate(datall, ulatlon)
+#endif
+             end if
+
+
 
              if(nf_selectedvar('div', output_varnames)) then
                 if (par%masterproc) print *,'writing div...'
