@@ -44,8 +44,8 @@ public :: smooth_phis
 ! compute vorticity/divergence and then project to make continious
 ! high-level routines uses only for I/O
 public :: compute_zeta_C0
-public :: compute_vort3D_C0
-public :: compute_grad3D_C0
+public :: compute_vort3D
+public :: compute_grad3D
 public :: compute_div_C0
 interface compute_zeta_C0
     module procedure compute_zeta_C0_hybrid       ! hybrid version
@@ -54,10 +54,6 @@ end interface
 interface compute_vort3D_C0
     module procedure compute_vort3D_C0_hybrid       ! hybrid version
     module procedure compute_vort3D_C0_par          ! single threaded
-end interface
-interface compute_grad3D_C0
-    module procedure compute_grad3D_C0_hybrid       ! hybrid version
-    module procedure compute_grad3D_C0_par          ! single threaded
 end interface
 interface compute_div_C0
     module procedure compute_div_C0_hybrid
@@ -369,38 +365,6 @@ subroutine compute_vort3D_C0_par(zeta,w,phi_i,elem,par,nt)
 
 end subroutine compute_vort3D_C0_par
 
-subroutine compute_grad3D_C0_par(zeta,w,phi_i,elem,par,nt)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  ! compute C0 vorticity.  That is, solve:  
-  !     < PHI, zeta > = <PHI, curl(elem%state%v >
-  !
-  !    input:  v (stored in elem()%, in lat-lon coordinates)
-  !    output: zeta(:,:,:,:)   
-  !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  type (parallel_t) :: par
-  type (element_t)     , intent(in), target :: elem(:)
-  real (kind=real_kind), dimension(np,np,3,nlev,nelemd) :: zeta
-  real (kind=real_kind), dimension(np,np,nlev,nelemd) :: w
-  real (kind=real_kind), dimension(np,np,nlevp,nelemd) :: phi_i
-  integer :: nt
-
-  ! local
-  type (hybrid_t)              :: hybrid
-  integer :: k,i,j,ie,ic
-  type (derivative_t)          :: deriv
-
-  ! single thread
-  hybrid = hybrid_create(par,0,1)
-
-  call compute_grad3D_C0_hybrid(zeta,w,phi_i,elem,hybrid,1,nelemd,nt)
-
-end subroutine compute_grad3D_C0_par
-
-
-
-
-
 subroutine grad_C0(grad,elem,par)
 type (parallel_t), intent(in) :: par
 type (element_t)     , intent(in), target :: elem(:)
@@ -520,7 +484,7 @@ subroutine compute_vort3D_C0_hybrid(zeta,w,phi_i,elem,hybrid,nets,nete,nt)
 end subroutine compute_vort3D_C0_hybrid
 
 
-subroutine compute_grad3D_C0_hybrid(grad,w,phi_i,elem,hybrid,nets,nete,nt)
+subroutine compute_grad3D(grad,w,phi_i,elem,nt)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   ! compute C0 vorticity.  That is, solve:  
   !     < PHI, grad > = <PHI, curl(elem%state%v >
@@ -530,11 +494,9 @@ subroutine compute_grad3D_C0_hybrid(grad,w,phi_i,elem,hybrid,nets,nete,nt)
   !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  type (hybrid_t)      , intent(in) :: hybrid
   type (element_t)     , intent(in), target :: elem(:)
-  integer :: nt,nets,nete
+  integer :: nt
   real (kind=real_kind), dimension(np,np,3,nlev,nets:nete) :: grad
-  real (kind=real_kind), dimension(np,np,nlev,nets:nete) :: grad_temp !jrub
   real (kind=real_kind), dimension(np,np,nlev,nelemd) :: w
   real (kind=real_kind), dimension(np,np,nlevp,nelemd) :: phi_i
 
@@ -544,21 +506,14 @@ subroutine compute_grad3D_C0_hybrid(grad,w,phi_i,elem,hybrid,nets,nete,nt)
 
   call derivinit(deriv)
 
-  do ie=nets,nete
+  do ie=1,nelemd
 #if (defined COLUMN_OPENMP)
      !$omp parallel do private(k)
 #endif
      grad(:,:,:,:,ie)=gradient3D_sphere(w,phi_i,deriv,elem(ie))
   enddo
 
-  !do i=1,3
-  !   grad_temp = grad(:,:,i,:,:) !jrub
-
-  !   !call make_C0(grad(:,:,i,:,:),elem,hybrid,nets,nete)
-  !   call make_C0(grad_temp,elem,hybrid,nets,nete) !jrub
-  !   grad(:,:,i,:,:) = grad_temp !jrub
-  !enddo
-end subroutine compute_grad3D_C0_hybrid
+end subroutine compute_grad3D
 
 
 

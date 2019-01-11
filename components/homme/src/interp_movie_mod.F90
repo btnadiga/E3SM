@@ -613,7 +613,7 @@ contains
 
 
              !balu this needs to be checked for correctness
-             if(nf_selectedvar('gradTh_x', output_varnames)) then
+             if(nf_selectedvar('gradTh', output_varnames)) then
 #ifdef V_IS_LATLON
                 if (par%masterproc) print *,'writing gradTh_x...'
                 allocate(datall(ncnt,nlev))
@@ -623,82 +623,29 @@ contains
                    call get_field(elem(ie),'phi_i',phi_i(:,:,:,ie),hvcoord,n0,n0_Q)
                 enddo
 
-                call compute_grad3D_C0(ulatlon,pottemp,phi_i,elem,par,n0)
+                call compute_grad3D(ulatlon,pottemp,phi_i,elem,n0)
 
-                ulatlon_temp = ulatlon(:,:,1,:,:)
-                call make_C0(ulatlon_temp,elem,par)
+                do itmp=1,3
+                   ulatlon_temp = ulatlon(:,:,itmp,:,:)
+                   call make_C0(ulatlon_temp,elem,par)
 
+                   st=1
+                   do ie=1,nelemd
+                      en=st+interpdata(ie)%n_interp-1
+                      call interpolate_scalar(interpdata(ie), &
+                           !ulatlon(:,:,1,:,ie), &
+                           ulatlon_temp(:,:,:,ie), &
+                           np, nlev, datall(st:en,:))
+                      st=st+interpdata(ie)%n_interp
+                   enddo
 
-                st=1
-                do ie=1,nelemd
-                   en=st+interpdata(ie)%n_interp-1
-                   call interpolate_scalar(interpdata(ie), &
-                        !ulatlon(:,:,1,:,ie), &
-                        ulatlon_temp(:,:,:,ie), &
-                        np, nlev, datall(st:en,:))
-                   st=st+interpdata(ie)%n_interp
+                   call nf_put_var(ncdf(ios),datall,start3d, count3d, name=foo(itmp))
                 enddo
-                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_x')
 
                 !deallocate(datall, ulatlon)
                 deallocate(datall, ulatlon,ulatlon_temp)
 #endif
              end if
-
-             !balu this needs to be checked for correctness
-             if(nf_selectedvar('gradTh_y', output_varnames)) then
-#ifdef V_IS_LATLON
-                if (par%masterproc) print *,'writing gradTh_y...'
-                allocate(datall(ncnt,nlev))
-                allocate(ulatlon(np,np,3,nlev,nelemd))
-                do ie=1,nelemd
-                   call get_field(elem(ie),'pottemp',pottemp(:,:,:,ie),hvcoord,n0,n0_Q)
-                   call get_field(elem(ie),'phi_i',phi_i(:,:,:,ie),hvcoord,n0,n0_Q)
-                enddo
-
-                call compute_grad3D_C0(ulatlon,pottemp,phi_i,elem,par,n0)
-
-                st=1
-                do ie=1,nelemd
-                   en=st+interpdata(ie)%n_interp-1
-                   call interpolate_scalar(interpdata(ie), &
-                        ulatlon(:,:,2,:,ie), &
-                        np, nlev, datall(st:en,:))
-                   st=st+interpdata(ie)%n_interp
-                enddo
-                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_y')
-
-                deallocate(datall, ulatlon)
-#endif
-             end if
-
-             !balu this needs to be checked for correctness
-             if(nf_selectedvar('gradTh_z', output_varnames)) then
-#ifdef V_IS_LATLON
-                if (par%masterproc) print *,'writing gradTh_z...'
-                allocate(datall(ncnt,nlev))
-                allocate(ulatlon(np,np,3,nlev,nelemd))
-                do ie=1,nelemd
-                   call get_field(elem(ie),'pottemp',pottemp(:,:,:,ie),hvcoord,n0,n0_Q)
-                   call get_field(elem(ie),'phi_i',phi_i(:,:,:,ie),hvcoord,n0,n0_Q)
-                enddo
-
-                call compute_grad3D_C0(ulatlon,pottemp,phi_i,elem,par,n0)
-
-                st=1
-                do ie=1,nelemd
-                   en=st+interpdata(ie)%n_interp-1
-                   call interpolate_scalar(interpdata(ie), &
-                        ulatlon(:,:,3,:,ie), &
-                        np, nlev, datall(st:en,:))
-                   st=st+interpdata(ie)%n_interp
-                enddo
-                call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_z')
-
-                deallocate(datall, ulatlon)
-#endif
-             end if
-
 
 
              if(nf_selectedvar('div', output_varnames)) then
