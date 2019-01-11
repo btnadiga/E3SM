@@ -853,7 +853,7 @@ function gradient3D_sphere(theta,phi_i,deriv,elem) result(grad)
   theta_i(:,:,1) = theta(:,:,1)
   theta_i(:,:,nlevp) = theta(:,:,nlev)
   do k=2,nlev
-     theta_i(:,:,k) =  (theta(:,:,k-1) + theta(:,:,k) ) / 2
+     theta_i(:,:,k) =  (theta(:,:,k-1) + theta(:,:,k) ) / 2 !todo correct weights
   enddo
 
 ! vertical derivatives at cell centers
