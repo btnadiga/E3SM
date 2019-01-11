@@ -466,6 +466,7 @@ contains
     real(kind=real_kind),parameter :: dayspersec=1d0/(3600.*24.)
     real(kind=real_kind), allocatable :: datall(:,:), var3d(:,:,:,:)
     real(kind=real_kind), allocatable :: varvtmp(:,:,:,:), ulatlon(:,:,:,:,:)
+    real(kind=real_kind), allocatable :: ulatlon_temp(:,:,:,:) !jrub
     real(kind=real_kind)  :: temp3d(np,np,nlev)    
     real(kind=real_kind)  :: phi_i(np,np,nlevp,nelemd)
     real(kind=real_kind)  :: w(np,np,nlev,nelemd)
@@ -624,17 +625,23 @@ contains
 
                 call compute_grad3D_C0(ulatlon,pottemp,phi_i,elem,par,n0)
 
+                ulatlon_temp = ulatlon(:,:,1,:,:)
+                call make_C0(ulatlon_temp,elem,par)
+
+
                 st=1
                 do ie=1,nelemd
                    en=st+interpdata(ie)%n_interp-1
                    call interpolate_scalar(interpdata(ie), &
-                        ulatlon(:,:,1,:,ie), &
+                        !ulatlon(:,:,1,:,ie), &
+                        ulatlon_temp(:,:,:,ie), &
                         np, nlev, datall(st:en,:))
                    st=st+interpdata(ie)%n_interp
                 enddo
                 call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_x')
 
-                deallocate(datall, ulatlon)
+                !deallocate(datall, ulatlon)
+                deallocate(datall, ulatlon,ulatlon_temp)
 #endif
              end if
 
