@@ -534,6 +534,7 @@ subroutine compute_grad3D_C0_hybrid(grad,w,phi_i,elem,hybrid,nets,nete,nt)
   type (element_t)     , intent(in), target :: elem(:)
   integer :: nt,nets,nete
   real (kind=real_kind), dimension(np,np,3,nlev,nets:nete) :: grad
+  real (kind=real_kind), dimension(np,np,nlev,nets:nete) :: grad_temp !jrub
   real (kind=real_kind), dimension(np,np,nlev,nelemd) :: w
   real (kind=real_kind), dimension(np,np,nlevp,nelemd) :: phi_i
 
@@ -550,9 +551,13 @@ subroutine compute_grad3D_C0_hybrid(grad,w,phi_i,elem,hybrid,nets,nete,nt)
      grad(:,:,:,:,ie)=gradient3D_sphere(w,phi_i,deriv,elem(ie))
   enddo
 
-  do i=1,3
-     call make_C0(grad(:,:,i,:,:),elem,hybrid,nets,nete)
-  enddo
+  !do i=1,3
+  !   grad_temp = grad(:,:,i,:,:) !jrub
+
+  !   !call make_C0(grad(:,:,i,:,:),elem,hybrid,nets,nete)
+  !   call make_C0(grad_temp,elem,hybrid,nets,nete) !jrub
+  !   grad(:,:,i,:,:) = grad_temp !jrub
+  !enddo
 end subroutine compute_grad3D_C0_hybrid
 
 
