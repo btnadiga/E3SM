@@ -88,7 +88,7 @@ contains
   select case(name)
     case ('temperature','T'); call get_temperature(elem,field,hvcoord,nt)
     case ('pottemp','Th');    call get_pottemp(elem,field,hvcoord,nt,ntQ)
-    case ('phi','geo');       call get_phi(elem,field,phi_i,hvcoord,nt,ntQ)
+    case ('phi','geo','phi_i'); call get_phi(elem,field,phi_i,hvcoord,nt,ntQ) 
     case ('dpnh_dp');         call get_dpnh_dp(elem,field,hvcoord,nt,ntQ)
     case ('pnh');             call get_nonhydro_pressure(elem,field,tmp  ,hvcoord,nt,ntQ)
     case ('exner');           call get_nonhydro_pressure(elem,tmp  ,field,hvcoord,nt,ntQ)
