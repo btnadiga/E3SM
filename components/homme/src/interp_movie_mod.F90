@@ -48,6 +48,8 @@ module interp_movie_mod
 #undef V_IS_LATLON
 #if defined(_PRIM)
 #define V_IS_LATLON
+
+  !character*(*), parameter :: gradTh(3)=(/'gradTh_x','gradTh_y','gradTh_z'/) !jrub
   integer, parameter :: varcnt = 47
   integer, parameter :: maxdims =  5
   character*(*), parameter :: varnames(varcnt)=(/'ps       ', &
@@ -128,7 +130,7 @@ module interp_movie_mod
        1,2,3,5,0,  &   ! zeta
        1,2,3,5,0,  &   ! zeta_X
        1,2,3,5,0,  &   ! zeta_y
-       1,2,3,5,0,  &   ! gradTh_x
+       1,2,3,5,0,  &   ! gradTh
        1,2,3,5,0,  &   ! gradTh_y
        1,2,3,5,0,  &   ! gradTh_z
        1,2,3,5,0,  &   ! dp3d
@@ -445,7 +447,7 @@ contains
     use pio, only : pio_setdebuglevel, pio_syncfile ! _EXTERNAL
 
     use viscosity_mod, only : compute_zeta_C0, make_c0, compute_zeta_c0_contra,&
-                              compute_div_c0,compute_div_c0_contra, compute_vort3D_C0, compute_grad3D_C0
+                              compute_div_c0,compute_div_c0_contra, compute_vort3D_C0, compute_grad3D
     use perf_mod, only : t_startf, t_stopf ! _EXTERNAL
     use time_mod   , only : TimeLevel_Qdp
     ! ---------------------
@@ -473,8 +475,10 @@ contains
     real(kind=real_kind)  :: pottemp(np,np,nlev,nelemd)    
     integer :: st, en
 
-    integer :: ierr
 
+    !character(len=3) :: gradTh !jrub
+    integer :: ierr
+    integer :: itmp !jrub
     integer :: ncnt,n0,n0_Q,itype,qindex,cindex
     character(len=2) :: vname
 
@@ -613,19 +617,29 @@ contains
 
 
              !balu this needs to be checked for correctness
-             if(nf_selectedvar('gradTh', output_varnames)) then
+             if(nf_selectedvar('gradTh_x', output_varnames) .OR. nf_selectedvar('gradTh_y', &
+                  output_varnames) .OR. nf_selectedvar('gradTh_z', output_varnames)) then
 #ifdef V_IS_LATLON
-                if (par%masterproc) print *,'writing gradTh_x...'
-                allocate(datall(ncnt,nlev))
+                
+
+                if (par%masterproc) print *,'writing gradTh...'
+                !allocate(datall(ncnt,nlev))
                 allocate(ulatlon(np,np,3,nlev,nelemd))
+                !allocate(ulatlon_temp(np,np,nlev,nelemd)) !jrub
                 do ie=1,nelemd
-                   call get_field(elem(ie),'pottemp',pottemp(:,:,:,ie),hvcoord,n0,n0_Q)
+                   call get_field(elem(ie),'pottemp',temp3d,hvcoord,n0,n0_Q)
+
+                   pottemp(:,:,:,ie) =  temp3d
                    call get_field(elem(ie),'phi_i',phi_i(:,:,:,ie),hvcoord,n0,n0_Q)
                 enddo
 
                 call compute_grad3D(ulatlon,pottemp,phi_i,elem,n0)
 
                 do itmp=1,3
+                   allocate(datall(ncnt,nlev))
+                   allocate(ulatlon_temp(np,np,nlev,nelemd)) !jrub
+
+                   !ulatlon_temp = ulatlon(:,:,itmp,:,:)
                    ulatlon_temp = ulatlon(:,:,itmp,:,:)
                    call make_C0(ulatlon_temp,elem,par)
 
@@ -633,17 +647,26 @@ contains
                    do ie=1,nelemd
                       en=st+interpdata(ie)%n_interp-1
                       call interpolate_scalar(interpdata(ie), &
-                           !ulatlon(:,:,1,:,ie), &
                            ulatlon_temp(:,:,:,ie), &
                            np, nlev, datall(st:en,:))
                       st=st+interpdata(ie)%n_interp
                    enddo
-
-                   call nf_put_var(ncdf(ios),datall,start3d, count3d, name=foo(itmp))
+                   
+                   !jrub
+                   select case (itmp)
+                      case (1)
+                         call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_x')
+                      case (2)
+                         call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_y')
+                      case (3)
+                         call nf_put_var(ncdf(ios),datall,start3d, count3d, name='gradTh_z')
+                   end select
+                   deallocate(datall,ulatlon_temp)
+                   !call nf_put_var(ncdf(ios),datall,start3d, count3d, name=gradTh(itmp))
                 enddo
 
                 !deallocate(datall, ulatlon)
-                deallocate(datall, ulatlon,ulatlon_temp)
+                deallocate(ulatlon)
 #endif
              end if
 

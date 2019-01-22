@@ -44,7 +44,7 @@ public :: smooth_phis
 ! compute vorticity/divergence and then project to make continious
 ! high-level routines uses only for I/O
 public :: compute_zeta_C0
-public :: compute_vort3D
+public :: compute_vort3D_C0
 public :: compute_grad3D
 public :: compute_div_C0
 interface compute_zeta_C0
@@ -496,7 +496,8 @@ subroutine compute_grad3D(grad,w,phi_i,elem,nt)
 
   type (element_t)     , intent(in), target :: elem(:)
   integer :: nt
-  real (kind=real_kind), dimension(np,np,3,nlev,nets:nete) :: grad
+  !real (kind=real_kind), dimension(np,np,3,nlev,nets:nete) :: grad
+  real (kind=real_kind), dimension(np,np,3,nlev,nelemd) :: grad
   real (kind=real_kind), dimension(np,np,nlev,nelemd) :: w
   real (kind=real_kind), dimension(np,np,nlevp,nelemd) :: phi_i
 

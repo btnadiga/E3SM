@@ -456,6 +456,7 @@ contains
 
     end function gradient_sphere
 
+
   function curl_sphere_wk_testcov(s,deriv,elem) result(ds)
 !
 !   integrated-by-parts gradient, w.r.t. COVARIANT test functions
