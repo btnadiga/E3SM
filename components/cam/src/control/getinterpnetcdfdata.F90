@@ -132,7 +132,7 @@ subroutine getinterpncdata( NCID, camlat, camlon, TimeIdx, &
          usable_var = .true.
       endif
 
-      if ( dim_name .EQ. 'lon' ) then
+      if ( dim_name .EQ. 'lon' .or. dim_name .EQ. 'ncol') then
          start( i ) = lonIdx
          count( i ) = 1           ! Extract a single value
          dims_set = dims_set + 1
@@ -189,7 +189,7 @@ subroutine getinterpncdata( NCID, camlat, camlon, TimeIdx, &
       outdata(1) = tmp(1)
       return                 ! no need to do interpolation 
    endif
-!   if ( use_camiop .and. nlev.eq.plev) then
+!   if ( use_replay .and. nlev.eq.plev) then
    if ( nlev.eq.plev .or. nlev.eq.plev+1) then
       outData(:nlev)= tmp(:nlev)! no need to do interpolation 
    else

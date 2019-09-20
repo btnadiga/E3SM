@@ -25,7 +25,7 @@ subroutine scm_setinitial
   integer i, j, k, thelev
   integer inumliq, inumice, icldliq, icldice
 
-  if (.not. use_camiop) then
+  if (.not. use_replay) then
     call cnst_get_ind('NUMLIQ', inumliq, abort=.false.)
     call cnst_get_ind('NUMICE', inumice, abort=.false.)
     call cnst_get_ind('CLDLIQ', icldliq)
@@ -117,6 +117,11 @@ subroutine eul_post_forecast(lat, psm1, qfcst, cwava, &
    integer lat
    integer nlon
    integer i,k,m
+
+!
+! Assign prescribed wfld to the Eulerian omega field
+
+   if (have_omega) omga(1,:,lat) = wfld(:)
 
    call pdelb0 (psm1, pdelb, nlon)
 !

@@ -112,6 +112,10 @@ integer :: phys_twin_algorithm
 !                      phys_grid module.  
 integer :: phys_chnk_per_thd
 ! 
+! phys_chnk_cost_write Output option for evaluating physics chunk load balance.  See 
+!                      phys_grid module.  
+logical :: phys_chnk_cost_write
+! 
 ! tracers_flag = .F.    If true, implement tracer test code. Number of tracers determined
 !                      in tracers_suite.F90 must agree with PCNST
 !
@@ -234,6 +238,7 @@ contains
    use modal_aer_opt,       only: modal_aer_opt_readnl
    use clubb_intr,          only: clubb_readnl
    use chemistry,           only: chem_readnl
+   use lin_strat_chem,      only: linoz_readnl
    use prescribed_volcaero, only: prescribed_volcaero_readnl
    use aerodep_flx,         only: aerodep_flx_readnl
    use solar_data,          only: solar_data_readnl
@@ -297,7 +302,7 @@ contains
                      indirect, &
                      print_step_cost,  &
                      phys_alltoall, phys_loadbalance, phys_twin_algorithm, &
-                     phys_chnk_per_thd
+                     phys_chnk_per_thd, phys_chnk_cost_write
 
    ! physics buffer
    namelist /cam_inparm/ pbuf_global_allocate
@@ -332,7 +337,8 @@ contains
       phys_loadbalance_out    =phys_loadbalance,    &
       phys_twin_algorithm_out =phys_twin_algorithm, &
       phys_alltoall_out       =phys_alltoall,       &
-      phys_chnk_per_thd_out   =phys_chnk_per_thd    )
+      phys_chnk_per_thd_out   =phys_chnk_per_thd,   &
+      phys_chnk_cost_write_out=phys_chnk_cost_write )
 
    ! conservation
    call check_energy_defaultopts( &
@@ -403,7 +409,8 @@ contains
        phys_loadbalance_in    =phys_loadbalance,    &
        phys_twin_algorithm_in =phys_twin_algorithm, &
        phys_alltoall_in       =phys_alltoall,       &
-       phys_chnk_per_thd_in   =phys_chnk_per_thd    )
+       phys_chnk_per_thd_in   =phys_chnk_per_thd,   &
+       phys_chnk_cost_write_in=phys_chnk_cost_write )
 
    ! conservation
    call check_energy_setopts( &
@@ -472,6 +479,7 @@ contains
    call rad_data_readnl(nlfilename)
    call modal_aer_opt_readnl(nlfilename)
    call chem_readnl(nlfilename)
+   call linoz_readnl(nlfilename)
    call prescribed_volcaero_readnl(nlfilename)
    call solar_data_readnl(nlfilename)
    call carma_readnl(nlfilename)
@@ -622,6 +630,7 @@ subroutine distnl
    call mpibcast (phys_twin_algorithm,1,mpiint,0,mpicom)
    call mpibcast (phys_alltoall      ,1,mpiint,0,mpicom)
    call mpibcast (phys_chnk_per_thd  ,1,mpiint,0,mpicom)
+   call mpibcast (phys_chnk_cost_write,1,mpilog,0,mpicom)
 
    ! Physics buffer
    call mpibcast (pbuf_global_allocate, 1, mpilog, 0, mpicom)
