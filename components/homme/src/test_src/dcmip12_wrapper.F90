@@ -428,10 +428,9 @@ subroutine dcmip2012_test2_2(elem,hybrid,hvcoord,nets,nete,shear)
      do k=1,nlevp; do j=1,np; do i=1,np
         call get_coordinates(lat,lon,hyai,hybi, i,j,k,elem(ie),hvcoord)
         call test2_schaer_mountain2(lon,lat,p,z,zcoords,use_eta,hyai,hybi,shear,u,v,w,T,phis,ps,rho,q(1)) !JRUB
-        dp = pressure_thickness(ps,k,hvcoord)
-        call set_state_i(u,v,w,T,ps,phis,p,dp,z,g, i,j,k,elem(ie),1,nt)
+        call set_state_i(u,v,w,T,ps,phis,p,z,g, i,j,k,elem(ie),1,nt)
      enddo; enddo; enddo; 
-     call tests_finalize(elem(ie),hvcoord,1,nt)
+     call tests_finalize(elem(ie),hvcoord)
   enddo
 
   ! store initial velocity fields for use in sponge layer
