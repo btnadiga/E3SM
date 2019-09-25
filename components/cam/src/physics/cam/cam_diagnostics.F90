@@ -22,7 +22,6 @@ use phys_control,  only: phys_getopts
 use wv_saturation, only: qsat, qsat_water, svp_ice
 use time_manager,  only: is_first_step
 
-use scamMod,       only: single_column, wfld
 use cam_abortutils,    only: endrun
 
 implicit none
@@ -907,7 +906,7 @@ end subroutine diag_conv_tend_ini
 
 
 
-#if (defined BFB_CAM_SCAM_IOP )
+#if (defined E3SM_SCM_REPLAY )
     call outfld('phis    ',state%phis,    pcols,   lchnk     )
 #endif
 
@@ -1063,13 +1062,9 @@ end subroutine diag_conv_tend_ini
 
 ! Vertical velocity and advection
 
-    if (single_column) then
-       call outfld('OMEGA   ',wfld,    pcols,   lchnk     )
-    else
-       call outfld('OMEGA   ',state%omega,    pcols,   lchnk     )
-    endif
+    call outfld('OMEGA   ',state%omega,    pcols,   lchnk     )
 
-#if (defined BFB_CAM_SCAM_IOP )
+#if (defined E3SM_SCM_REPLAY )
     call outfld('omega   ',state%omega,    pcols,   lchnk     )
 #endif
 
@@ -1486,7 +1481,7 @@ subroutine diag_conv(state, ztodt, pbuf)
    call outfld('PRECLav ', precl, pcols, lchnk )
    call outfld('PRECCav ', precc, pcols, lchnk )
 
-#if ( defined BFB_CAM_SCAM_IOP )
+#if ( defined E3SM_SCM_REPLAY )
    call outfld('Prec   ' , prect, pcols, lchnk )
 #endif
 
@@ -1579,10 +1574,12 @@ subroutine diag_surf (cam_in, cam_out, ps, trefmxav, trefmnav )
     call outfld('RHREFHT',   ftem,      pcols, lchnk)
 
 
-#if (defined BFB_CAM_SCAM_IOP )
+#if (defined E3SM_SCM_REPLAY )
     call outfld('shflx   ',cam_in%shf,   pcols,   lchnk)
     call outfld('lhflx   ',cam_in%lhf,   pcols,   lchnk)
     call outfld('trefht  ',cam_in%tref,  pcols,   lchnk)
+    call outfld('Tg', cam_in%ts, pcols, lchnk)
+    call outfld('Tsair',cam_in%ts, pcols, lchnk)
 #endif
 !
 ! Ouput ocn and ice fractions

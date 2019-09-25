@@ -9,7 +9,7 @@ more.
 
 from CIME.BuildTools.macrowriterbase import MacroWriterBase
 from CIME.XML.standard_module_setup import *
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 
 # This is not the most useful check.
 # pylint: disable=invalid-name
@@ -58,8 +58,8 @@ class MakeMacroWriter(MacroWriterBase):
         >>> import io
         >>> s = io.StringIO()
         >>> MakeMacroWriter(s).set_variable("foo", "bar")
-        >>> s.getvalue()
-        u'foo := bar\\n'
+        >>> str(s.getvalue())
+        'foo := bar\\n'
         """
         # Note that ":=" is used so that we can control the behavior for
         # both Makefile and CMake variables similarly.
@@ -71,8 +71,8 @@ class MakeMacroWriter(MacroWriterBase):
         >>> import io
         >>> s = io.StringIO()
         >>> MakeMacroWriter(s).start_ifeq("foo", "bar")
-        >>> s.getvalue()
-        u'ifeq (foo,bar)\\n'
+        >>> str(s.getvalue())
+        'ifeq (foo,bar)\\n'
         """
         self.write_line("ifeq (" + left + "," + right + ")")
         self.indent_right()
@@ -86,8 +86,8 @@ class MakeMacroWriter(MacroWriterBase):
         >>> writer.start_ifeq("foo", "bar")
         >>> writer.set_variable("foo2", "bar2")
         >>> writer.end_ifeq()
-        >>> s.getvalue()
-        u'ifeq (foo,bar)\\n  foo2 := bar2\\nendif\\n'
+        >>> str(s.getvalue())
+        'ifeq (foo,bar)\\n  foo2 := bar2\\nendif\\n'
         """
         self.indent_left()
         self.write_line("endif")

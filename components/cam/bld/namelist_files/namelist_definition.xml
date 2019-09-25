@@ -509,6 +509,12 @@ processes, otherwise use option 0 (approx.).
 Default: -1
 </entry>
 
+<entry id="phys_chnk_cost_write" type="logical"  category="perf_dp_coup"
+       group="cam_inparm" valid_values="">
+Enable/disable output of measured physics cost per chunk.
+Default: .false.
+</entry>
+
 <entry id="phys_chnk_per_thd" type="integer"  category="perf_dp_coup"
        group="cam_inparm" valid_values="">
 Select target number of chunks per thread.  Must be positive.
@@ -1122,13 +1128,6 @@ IEFLX fixer options
 Default: 0
 </entry>
 
-<entry id="l_ieflx_fix" type="logical"  category="fixers"
-       group="phys_ctl_nl" valid_values="">
-Whether or not to turn on IEFLX fixer
-Default: false
-</entry>
-
-
 <!-- Gravity Wave Drag -->
 
 <entry id="use_gw_oro" type="logical" category="gw_drag"
@@ -1167,6 +1166,12 @@ Default: set by build-namelist.
 Force the stress due to gravity waves to be zero at the top of the model.
 In the low-top model, this helps to conserve momentum and produce a QBO.
 Default: set by build-namelist.
+</entry>
+
+<entry id="gw_convect_hcf" type="real" category="gw_drag"
+       group="gw_drag_nl" valid_values="" >
+Heating rate conversion factor associated with convective gravity waves
+Default: 20.0
 </entry>
 
 <entry id="effgw_beres" type="real" category="gw_drag"
@@ -2304,6 +2309,12 @@ Updraft velocity paramterization option for ice nucleation.
 Default: 1
 </entry>
 
+<entry id="microp_aero_wsubmin" type="real" category="microphysics"
+       group="microp_aero_nl" valid_values="" >
+Minimum subgrid vertical velocity
+Default: 0.2
+</entry>
+
 <entry id="use_hetfrz_classnuc" type="logical" category="microphys"
        group="phys_ctl_nl" valid_values="" >
 Switch to turn on heterogeneous freezing code.
@@ -2325,6 +2336,18 @@ Default: .false.
 <entry id="hist_preexisting_ice" type="logical" category="microphys"
        group="nucleate_ice_nl" valid_values="" >
 Add diagnostics for pre-existing ice option in ice nucleation code to history output.
+Default: .false.
+</entry>
+
+<entry id="use_nie_nucleate" type="logical" category="microphys"
+       group="nucleate_ice_nl" valid_values="" >
+Use Niemand et al. ice nucleation scheme for mixed-phase cloud
+Default: .false.
+</entry>
+
+<entry id="use_dem_nucleate" type="logical" category="microphys"
+       group="nucleate_ice_nl" valid_values="" >
+Use DeMott et al. ice nucleation scheme for mixed-phase cloud
 Default: .false.
 </entry>
 
@@ -2508,6 +2531,12 @@ Trigger and memory option in ZM deep convection scheme.
 Default: FALSE
 </entry>
 
+<entry id="zmconv_trigdcape_ull" type="logical" category="conv"
+       group="zmconv_nl" valid_values="" >
+DCAPE trigger along with unrestricted launching level for ZM deep convection scheme.
+Default: FALSE
+</entry>
+
 <entry id="zmconv_tiedke_add" type="real" category="conv"
        group="zmconv_nl" valid_values="" >
 A ZM deep convection parameter
@@ -2526,7 +2555,11 @@ Bottom layer adjustment for setting "launching" level(mx) (to be at maximum mois
 Default: set by build-namelist
 </entry>
 
-
+<entry id="zmconv_tp_fac" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+Tpert scale factor in ZM deep convection scheme.
+Default: 0.D0
+</entry>
 
 
 <!-- Cloud sedimentation -->
@@ -2737,7 +2770,7 @@ Default: FALSE
 </entry>
 
 <entry id="shallow_scheme" type="char*16" category="conv"
-       group="phys_ctl_nl" valid_values="Hack,UW,CLUBB_SGS,UNICON" >
+       group="phys_ctl_nl" valid_values="off,Hack,UW,CLUBB_SGS,UNICON" >
 Type of shallow convection scheme employed.  'Hack' for Hack shallow convection;
 'UW' for original McCaa UW pbl scheme, modified by Sungsu Park; 'CLUBB_SGS'
 for CLUBB_SGS; or UNICON which doesn't distinquish shallow and deep.
@@ -2862,6 +2895,12 @@ Default: .false.
 <entry id="clubb_stabcorrect" type="logical"  category="pblrad"
        group="clubbpbl_diff_nl" valid_values="" >
 CLUBB do explicit diffusion with a stability correction
+Default: .false.
+</entry>
+
+<entry id="clubb_use_sgv" type="logical"  category="pblrad"
+       group="clubbpbl_diff_nl" valid_values="" >
+Enables subgrid features gustiness, tpert, and thv fix
 Default: .false.
 </entry>
 
@@ -3027,6 +3066,18 @@ Constant associated with the dissipation of the variance of vertical velocity
 Default: 1.0. See clubb/parameters_tunable.F90
 </entry>
 
+<entry id="clubb_C1b" type="real" category="pblrad"
+       group="clubb_param_nl" valid_values="" >
+Constant associated with the dissipation of the variance of vertical velocity
+Default: 1.0. See clubb/parameters_tunable.F90
+</entry>
+
+<entry id="clubb_C1c" type="real" category="pblrad"
+       group="clubb_param_nl" valid_values="" >
+Constant associated with the dissipation of the variance of vertical velocity
+Default: 1.0. See clubb/parameters_tunable.F90
+</entry>
+
 <entry id="clubb_C2rt" type="real" category="pblrad"
        group="clubb_param_nl" valid_values="" >
 Constant associated with the dissipation of the variance of total water
@@ -3056,6 +3107,25 @@ Default: 4.0
 High skewness of Newtonian damping of water flux
 Default: 6.0
 </entry>
+
+<entry id="clubb_C6rtc" type="real" category="pblrad"
+       group="clubb_param_nl" valid_values="" >
+High skewness of Newtonian damping of water flux
+Default: 1.0
+</entry>
+
+<entry id="clubb_C6thlb" type="real" category="pblrad"
+       group="clubb_param_nl" valid_values="" >
+Low skewness of Newtonian damping of water flux
+Default: 1.0
+</entry>
+
+<entry id="clubb_C6thlc" type="real" category="pblrad"
+       group="clubb_param_nl" valid_values="" >
+Low skewness of Newtonian damping of water flux
+Default: 6.0
+</entry>
+
 
 <entry id="clubb_C7" type="real" category="pblrad"
        group="clubb_param_nl" valid_values="" >
@@ -3087,6 +3157,12 @@ High skewnes of buoyancy damping of the third moment of vertical velocity
 Default: 0.35
 </entry>
 
+<entry id="clubb_C11c" type="real" category="pblrad"
+       group="clubb_param_nl" valid_values="" >
+High skewnes of buoyancy damping of the third moment of vertical velocity
+Default: 0.5
+</entry>
+
 <entry id="clubb_C14" type="real" category="pblrad"
        group="clubb_param_nl" valid_values="" >
 Constant of Newtonian damping of the variances of u-wind and v-wind
@@ -3109,6 +3185,12 @@ Default: 0.32
        group="clubb_param_nl" valid_values="" >
 High Skw. gamma coef. Skw. Fnct.
 Default: 0.32 or clubb_gamma_coef if it is specified
+</entry>
+
+<entry id="clubb_gamma_coefc" type="real" category="pblrad"
+       group="clubb_param_nl" valid_values="" >
+High Skw. gamma coef. Skw. Fnct.
+Default: 5.0or clubb_gamma_coef if it is specified
 </entry>
 
 <entry id="clubb_mu" type="real" category="pblrad"
@@ -3839,6 +3921,18 @@ ice nucleation scheme by Demott
 Default: .false.
 </entry>
 
+<entry id="pergro_mods" type="logical"  category="perturbation"
+       group="phys_ctl_nl" valid_values="" >
+switch to turn on pergro code changes
+Default: .false.
+</entry>
+
+<entry id="pergro_test_active" type="logical"  category="perturbation"
+       group="phys_ctl_nl" valid_values="" >
+switch to turn on code instrumentations for running pergro test
+Default: .false.
+</entry>
+
 
 <!-- Flag to turn on/off amicphys codes -->
 <entry id="mam_amicphys_optaa" type="integer"  category="scavenging"
@@ -3949,7 +4043,7 @@ Default: set by build-namelist.
 </entry>
 
 <entry id="iradae" type="integer"  category="radiation"
-       group="cam_inparm" valid_values="">
+       group="radiation_nl" valid_values="">
 Interval between absorptivity/emissivity calculations in time steps (if
 positive) or model hours (if negative).  To avoid having the abs/ems values
 saved on the restart output, make sure that the interval of the abs/ems
@@ -3958,34 +4052,34 @@ Default: -12
 </entry>
 
 <entry id="iradlw" type="integer"  category="radiation"
-       group="cam_inparm" valid_values="">
+       group="radiation_nl" valid_values="">
 Interval of long-wave radiation calculation in timesteps (if positive) or
 model hours (if negative).
 Default: -1
 </entry>
 
 <entry id="iradsw" type="integer"  category="radiation"
-       group="cam_inparm" valid_values="">
+       group="radiation_nl" valid_values="">
 Interval of short-wave radiation calculation in timesteps (if positive) or
 model hours (if negative).
 Default: -1
 </entry>
 
 <entry id="irad_always" type="integer"  category="radiation"
-       group="cam_inparm" valid_values="">
+       group="radiation_nl" valid_values="">
 Specifies length of time in timesteps (positive) or hours (negative) SW/LW
 radiation will be run for every timestep from the start of an initial run.
 Default: 0
 </entry>
 
 <entry id="spectralflux" type="logical"  category="radiation"
-       group="cam_inparm" valid_values="" >
+       group="radiation_nl" valid_values="" >
 Return fluxes per band in addition to the total fluxes.
 Default: FALSE
 </entry>
 
 <entry id="use_rad_dt_cosz" type="logical"  category="radiation"
-       group="cam_inparm" valid_values="" >
+       group="radiation_nl" valid_values="" >
 If true, then use the radiation timestep for all cosz calculations.
 NOTE: This logical flag is *temporary*. It should be REMOVED after we decide
 to make this functionality default
@@ -4140,6 +4234,16 @@ filepath and name for liquid cloud (gamma distributed) optics data for rrtmg
 Default: none
 </entry>
 
+<!-- RRTMGP gaseous absorption coefficients -->
+<entry id="rrtmgp_coefficients_file_lw" type="char*256" input_pathname="abs" 
+       category="radiation" group="radiation_nl" valid_values="">
+File path for RRTMGP longwave gaseous absorption coefficients file.
+</entry>
+
+<entry id="rrtmgp_coefficients_file_sw" type="char*256" input_pathname="abs"
+       category="radiation" group="radiation_nl" valid_values="">
+File path for RRTMGP shortwave gaseous absorption coefficients file.
+</entry>
 
 <!-- Rayleigh Friction Parameterization -->
 
@@ -5362,6 +5466,24 @@ if <varname>linoz_data_type</varname> is 'FIXED'.
 Default: 0 seconds
 </entry>
 
+<entry id="linoz_lbl" type="integer" category="linoz"
+       group="linoz_nl" valid_values="" >
+Tunable number of layers with ozone decay from the surface in Linoz
+Default: 4
+</entry>
+
+<entry id="linoz_sfc" type="real" category="linoz"
+       group="linoz_nl" valid_values="" >
+Tunable boundary layer concentration (ppb) to which Linoz ozone e-fold
+Default: 30.0e-9
+</entry>
+
+<entry id="linoz_tau" type="real" category="linoz"
+       group="linoz_nl" valid_values="" >
+Tunable Linoz e-fold time scale (in seconds) in the boundary layer
+Default: 172800.0
+</entry>
+
 <entry id="tracer_cnst_datapath" type="char*256" input_pathname="abs" category="cam_chem"
        group="chem_inparm" valid_values="" >
 Full pathname of the directory that contains the files specified in
@@ -5709,11 +5831,12 @@ Default: Set by build-namelist.
 </entry>
 
 <entry id="se_limiter_option" type="integer" category="se"
-       group="ctl_nl" valid_values="0,4,8" >
+       group="ctl_nl" valid_values="0,4,8,9" >
 Limiter used for horizontal tracer advection:
 0: None
 4: Sign-preserving limiter.
 8: Monotone limiter.
+9: CAAS monotone limiter.
 Default: Set by build-namelist (probably 8).
 </entry>
 
@@ -5730,7 +5853,7 @@ Default: Set by build-namelist.
 </entry>
 
 <entry id="se_ftype" type="integer" category="se"
-       group="ctl_nl" valid_values="0,1,2" >
+       group="ctl_nl" valid_values="0,1,2,3,4" >
 CAM physics forcing option:
 0: tendencies
 1: adjustments
@@ -5773,6 +5896,7 @@ tstep_type=2  RK2-SSP 3 stage (as used by tracers)
 tstep_type=3  classic Runga-Kutta (RK) 3 stage
 tstep_type=4  Kinnmark&Gray Runga-Kutta (RK) 4 stage
 tstep_type=5  Kinnmark&Gray Runga-Kutta (RK) 5 stage (3rd order accurate in time)
+tstep_type=7  Kinnmark&Gray Runga-Kutta IMEX
 Default: Set by build-namelist.
 </entry>
 
@@ -5790,8 +5914,14 @@ Number of hyperviscosity subcycles per dynamics timestep.
 Default: Set by build-namelist (probably 2).
 </entry>
 
+<entry id="hypervis_subcycle_tom" type="integer" category="se"
+       group="ctl_nl" valid_values="" >
+Number of viscosity subcycles per dynamics timestep.
+Default in homme: 0 (does not use time split wrt HV).
+</entry>
+
 <entry id="hypervis_subcycle_q" type="integer" category="se"
-       group="ctl_nl" valid_values="1" >
+       group="ctl_nl" valid_values="" >
 Number of hyperviscosity subcycles done in tracer advection code.
 The only supported value in CAM is 1.
 Default: Set by build-namelist.
@@ -5886,7 +6016,79 @@ Number of vertical threads.
 Default: 1.
 </entry>
 
+<entry id="theta_hydrostatic_mode" type="logical" category="se"
+       group="ctl_nl" valid_values="" >
+Indicates hydrostatic regime for atm. theta-l model.
+Default: true. 
+</entry>
 
+<entry id="theta_advect_form" type="integer" category="se"
+       group="ctl_nl" valid_values="" >
+Indicates form of eqn. for vtheta in theta-l model.
+0 is conservation form, 1 is expanded div form.
+Default: 0.
+</entry>
+	
+<entry id="cubed_sphere_map" type="integer" category="se"
+       group="ctl_nl" valid_values="" >
+Defines which map is used for ref. element in homme.
+Default for preqx target: 0.
+</entry>
+
+<entry id="transport_alg" type="integer" category="se"
+       group="ctl_nl" valid_values="0,12" >
+Tracer transport algorithm:
+0: Eulerian flux-form.
+12: COMPOSE semi-Lagrangian.
+</entry>
+
+<entry id="semi_lagrange_cdr_alg" type="integer" category="se"
+       group="ctl_nl" valid_values="2,3,20,30" >
+Constrained density reconstuctor (CDR) for property preservation:
+2: QLT
+3: CAAS
+20: QLT with superlevels of 8 levels.
+30: CAAS with superlevels of 8 levels.
+Default: 20
+</entry>
+
+<entry id="semi_lagrange_cdr_check" type="logical" category="se"
+       group="ctl_nl" valid_values="">
+Correctness check the CDR.
+Default: False
+</entry>
+
+<entry id="semi_lagrange_nearest_point_lev" type="integer" category="se"
+       group="ctl_nl" valid_values="">
+Number of levels, counting from the top, that are allowed to use the
+nearest point in the halo to the departure point, when necessary.
+Default: 0
+</entry>
+
+<entry id="semi_lagrange_hv_q" type="integer" category="se"
+       group="ctl_nl" valid_values="">
+Number of tracers, starting from 1, to which to apply hyperviscosity. For
+example, to apply hyperviscosity to moisture, the first tracer, set the value to
+1. Hyperviscosity is applied using nu_q as the coefficient.
+</entry>
+
+<!-- Physics grid -->
+
+<entry id="se_fv_phys_remap_alg" type="integer" category="se"
+       group="ctl_nl" valid_values="0,1">
+Remap algorithm to use to map between FV physics grid and GLL dynamics
+grid. 0, default, provides the original algorithms; 1 provides
+high-order algorithms implemented in gllfvremap_mod.
+</entry>
+
+<entry id="se_fv_nphys" type="integer" category="se"
+       group="dyn_se_inparm" valid_values="" >
+Number of equally-spaced horizontal physics points per spectral
+element. A number greater than zero will define [se_fv_nphys] equally
+spaced physics points in each direction (e.g., se_fv_nphys = 2 will
+result in 4 equally-spaced physics points per element).
+Default: 0 = feature disabled, use dynamics GLL points.
+</entry>
 
 <!-- CAM I/O  -->
 

@@ -121,6 +121,7 @@ module cam_history_support
     character(len=max_fieldname_len) :: name ! field name
     character(len=max_chars) :: long_name    ! long name
     character(len=max_chars) :: units        ! units
+    character(len=3)         :: mixing_ratio ! 'dry' or 'wet'
     character(len=max_chars) :: sampling_seq ! sampling sequence - if not every timestep, how often field is sampled
     ! (i.e., how often "outfld" is called):  every other; only during LW/SW
     ! radiation calcs; etc.
@@ -195,7 +196,7 @@ module cam_history_support
     type(var_desc_t) :: f12vmrid         ! var id for f12 volume mixing ratio
     type(var_desc_t) :: sol_tsiid        ! var id for total solar irradiance (W/m2)
     type(var_desc_t) :: datesecid        ! var id for curent seconds of current date
-#if ( defined BFB_CAM_SCAM_IOP )
+#if ( defined E3SM_SCM_REPLAY )
     type(var_desc_t) :: bdateid         ! var id for base date
     type(var_desc_t) :: tsecid        ! var id for curent seconds of current date
 #endif
@@ -812,9 +813,12 @@ contains
     character(len=128)                       :: errormsg
     integer                                  :: num_patches
     integer                                  :: i
+    integer                                  :: uid
     type(io_desc_t),        pointer          :: iodesc
     integer                                  :: ierr, nfdims
     integer                                  :: fdimlens(7), dimids(7)
+    integer                                  :: has_unlim_dim     ! 0 or 1 for presence of unlimdim
+    integer                                  :: non_unlim_nxt_idx ! idx to incrementally gather all non-unlim dims
  
     num_patches = size(this%patches)
 
@@ -833,7 +837,33 @@ contains
     end do
 
     ! We have the right grid, write the hbuf
-    call cam_pio_var_info(File, varid, nfdims, dimids, fdimlens)
+    call cam_pio_var_info(File, varid, nfdims, dimids, fdimlens,unlimDimID=uid)
+
+    ! Pack non-unlimited dim lens in fdimlens sequentially, leaving out unlimdim.
+    ! This is needed upon calling patchptr%get_decomp, 
+    ! because while the history file can contain unlimited dim, which would be
+    ! included in the returned arrays of nfdims, dimids, and fdimlens, 
+    ! the history field in hbuf does not contain a dimension corresponding to the unlimdim.
+
+    ! Assuming only one unlimited dim, which is allowed to be at any position in dimids
+    ! In current cam history output, only time dimension is unlimited, and increased 
+    ! incrementally during the course of simulation. 
+    !
+    ! If needed, it can be modified to allow for multiple unlimited dimensions
+    
+    has_unlim_dim = 0
+    non_unlim_nxt_idx = 1
+
+    do i=1,nfdims
+      if(dimids(i) /= uid) then
+        fdimlens(non_unlim_nxt_idx) = fdimlens(i)
+        non_unlim_nxt_idx = non_unlim_nxt_idx + 1
+      else
+        has_unlim_dim = 1
+      end if
+    end do
+    nfdims = nfdims - has_unlim_dim
+
     call patchptr%get_decomp(adims, fdimlens(1:nfdims), dtype, iodesc)
     if (size(adims) == 2) then
       call pio_write_darray(File, varid, iodesc, hbuf(:,1,:), ierr)

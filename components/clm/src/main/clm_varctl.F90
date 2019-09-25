@@ -93,12 +93,10 @@ module clm_varctl
   character(len=fname_len), public :: fatmlndfrc = ' '        ! lnd frac file on atm grid
   character(len=fname_len), public :: fatmtopo   = ' '        ! topography on atm grid
   character(len=fname_len), public :: flndtopo   = ' '        ! topography on lnd grid
-  character(len=fname_len), public :: flanduse_timeseries    = ' '        ! dynamic landuse dataset
   character(len=fname_len), public :: paramfile  = ' '        ! ASCII data file with PFT physiological constants
   character(len=fname_len), public :: nrevsn     = ' '        ! restart data file name for branch run
   character(len=fname_len), public :: fsnowoptics  = ' '      ! snow optical properties file name
   character(len=fname_len), public :: fsnowaging   = ' '      ! snow aging parameters file name
- !! X. YANG  : add soil order dependent parameter file
   character(len=fname_len), public :: fsoilordercon    = ' '  ! ASCII data file with soil order dependent  constants
 
   !----------------------------------------------------------
@@ -124,7 +122,14 @@ module clm_varctl
   !----------------------------------------------------------
 
   ! do not irrigate by default
-  logical, public :: irrigate = .false.            
+  logical, public :: irrigate = .false.
+
+  !----------------------------------------------------------
+  ! Two-way coupled irrigation with MOSART
+  !----------------------------------------------------------
+
+  ! True is 2way, false is 1way
+  logical, public :: tw_irr = .false.  
 
   !----------------------------------------------------------
   ! Landunit logic
@@ -160,7 +165,7 @@ module clm_varctl
   ! used to override an error check on reading in restart files
   logical, public :: override_bgc_restart_mismatch_dump = .false. 
 
-  ! Set in CNAllocationInit (TODO - had to move it here to avoid circular dependency)
+  ! Set in AllocationInit (TODO - had to move it here to avoid circular dependency)
   logical, private:: carbon_only      
   logical, private:: carbonnitrogen_only      
   logical, private:: carbonphosphorus_only      
@@ -189,7 +194,7 @@ module clm_varctl
   !  FATES switches
   !----------------------------------------------------------
 
-  logical, public            :: use_ed = .false.              ! true => use  ED
+  logical, public            :: use_fates = .false.              ! true => use  ED
   logical, public            :: use_fates_spitfire = .false.  ! true => use spitfire model
   logical, public            :: use_fates_logging = .false.            ! true => turn on logging module
   logical, public            :: use_fates_planthydro = .false.         ! true => turn on fates hydro
@@ -197,6 +202,10 @@ module clm_varctl
   logical, public            :: use_fates_ed_prescribed_phys = .false. ! true => prescribed physiology
   logical, public            :: use_fates_inventory_init = .false.     ! true => initialize fates from inventory
   character(len=256), public :: fates_inventory_ctrl_filename = ''     ! filename for inventory control
+  integer, public            :: fates_parteh_mode = -9                 ! 1 => carbon only
+                                                                       ! 2 => C+N+P (not enabled yet)
+                                                                       ! no others enabled
+
 
   !----------------------------------------------------------
   !  BeTR switches
@@ -300,9 +309,9 @@ module clm_varctl
   logical, public :: use_vichydro        = .false.
   logical, public :: use_century_decomp  = .false.
   logical, public :: use_cn              = .false.
-  logical, public :: use_cndv            = .false.
   logical, public :: use_crop            = .false.
   logical, public :: use_snicar_frc      = .false.
+  logical, public :: use_snicar_ad       = .false.
   logical, public :: use_vancouver       = .false.
   logical, public :: use_mexicocity      = .false.
   logical, public :: use_noio            = .false.
@@ -323,6 +332,11 @@ module clm_varctl
   logical, public :: use_petsc_thermal_model = .false.
 
   !----------------------------------------------------------
+  ! Stub EM switches
+  !----------------------------------------------------------
+  logical          , public :: use_em_stub = .false.
+
+  !----------------------------------------------------------
   ! To retrieve namelist
   !----------------------------------------------------------
   character(len=SHR_KIND_CL), public :: NLFilename_in ! Namelist filename
@@ -338,12 +352,29 @@ module clm_varctl
   ! forest N/P fertilization
   logical, public :: forest_fert_exp = .false. 
 
+  !-----------------------------------------------------------------------
+  ! ECA regular spinup with P on, keep labile, secondary, occluded, parent 
+  ! material P being constant or not
+  logical, public :: ECA_Pconst_RGspin = .false.
+
+  !-----------------------------------------------------------------------
+  ! Priority of plant to get symbiotic N fixation, phosphatase
+  logical, public :: NFIX_PTASE_plant = .false.
 
   !-----------------------------------------------------------------------
   ! Lateral grid connectivity
   !-----------------------------------------------------------------------
   logical, public            :: lateral_connectivity  = .false.
   character(len=256), public :: domain_decomp_type    = 'round_robin'
+
+  !-----------------------------------------------------------------------
+  ! flux limiter for phenology flux calculation
+  logical, public :: use_pheno_flux_limiter = .false.
+
+  ! Soil erosion
+  !-----------------------------------------------------------------------
+  logical, public :: use_erosion    = .false.
+  logical, public :: ero_ccycle     = .false.
 
   !-----------------------------------------------------------------------
   ! bgc & pflotran interface
@@ -368,6 +399,16 @@ module clm_varctl
    character(len=fname_len), public :: aero_file      = ' '    ! aerosol deposition file for CPL_BYPASS mode
 
 
+  !----------------------------------------------------------
+  ! Budgets
+  !----------------------------------------------------------
+   logical, public :: do_budgets   = .false.
+   integer, public :: budget_inst  = 0
+   integer, public :: budget_daily = 0
+   integer, public :: budget_month = 1
+   integer, public :: budget_ann   = 1
+   integer, public :: budget_ltann = 1
+   integer, public :: budget_ltend = 0
 contains
 
   !---------------------------------------------------------------------------

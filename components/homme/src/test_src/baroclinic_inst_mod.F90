@@ -9,8 +9,8 @@
 !  Polvani, Scott and Thomas, MWR 2004
 !  Jablonowski and Williamson, QJR (2006) 132 
 !
-
-
+!  MT 2017-11: be sure to DSS the initial condition for NGGPS tracers
+!
 module baroclinic_inst_mod
 !
 !  This module contains the initial condititions for two baroclinic
@@ -41,7 +41,7 @@ module baroclinic_inst_mod
     use hybvcoord_mod, only : hvcoord_t 
     ! ====================
     use coordinate_systems_mod, only : spherical_polar_t
-    use viscosity_mod, only : compute_zeta_C0
+    use viscosity_mod, only : compute_zeta_C0, make_c0
 
 
   implicit none
@@ -84,8 +84,8 @@ subroutine jw_baroclinic(elem,hybrid,hvcoord,nets,nete)
 
    real (kind=real_kind) :: r_d,omg,grv,erad
 
-   real(kind=real_kind), allocatable :: var3d(:,:,:,:)
-   real(kind=real_kind) :: temperature(np,np,nlev)
+   real(kind=real_kind) :: var3d(np,np,nlev,nets:nete)
+   real(kind=real_kind) :: temperature(np,np,nlev),ps(np,np)
 
    if (hybrid%masterthread) write(iulog,*) 'initializing Jablonowski and Williamson baroclinic instability test V1'
 
@@ -187,10 +187,8 @@ do ie=nets,nete
           elem(ie)%state%ps_v(i,j,:) = p0
        end do
     end do
-
-    do tl=1,timelevels
-       call set_thermostate(elem(ie),temperature,hvcoord,tl,1)
-    enddo
+    ps=p0
+    call set_thermostate(elem(ie),ps,temperature,hvcoord)
 enddo
 
 
@@ -214,7 +212,6 @@ endif
 ! so lets take truncated values to test qneg fixer
 if (qsize>=2) then
    idex=2 ! prevents a compiler warning when qsize<2
-   allocate(var3d(np,np,nlev,nets:nete))
    call compute_zeta_C0(var3d,elem,hybrid,nets,nete,1)
    do ie=nets,nete
       !do tl=1,3
@@ -229,7 +226,6 @@ if (qsize>=2) then
          enddo
       enddo
    enddo
-   deallocate(var3d)
 endif
 
 
@@ -244,23 +240,28 @@ endif
 
 ! if we run a test case with 10 tracers, assume we want to reproduce the AVEC benchmarks
 ! using SJ's test tracers:
+! tracers can be discontinous at element edges due to roundoff
+! need to DSS the initial condition
 if (qsize==10) then
    do ie=nets,nete
       do j=1,np
       do i=1,np
          term = sin(9.*elem(ie)%spherep(i,j)%lon)*sin(9.*elem(ie)%spherep(i,j)%lat)
-
          do k=1,nlev
-         do idex=qsize-6,qsize  
             if ( term < 0. ) then
-               elem(ie)%state%Q(i,j,k,idex) = 0
+               var3d(i,j,k,ie)=0
             else
-               elem(ie)%state%Q(i,j,k,idex) = 1
+               var3d(i,j,k,ie)=1
             endif
          enddo
-         enddo
       enddo
       enddo
+   enddo
+   call make_C0(var3d,elem,hybrid,nets,nete)
+   do idex=1,qsize
+   do ie=nets,nete
+      elem(ie)%state%Q(:,:,:,idex) = var3d(:,:,:,ie)
+   enddo
    enddo
 endif
 
@@ -303,7 +304,7 @@ endif
     real (kind=real_kind), dimension(nlat-1) :: dmu
     real (kind=real_kind), dimension(nlat) :: ufull, dtdphi
     real (kind=real_kind)                  :: t1(np,np,nets:nete,nlev)
-    real (kind=real_kind)                  :: temperature(np,np,nlev)
+    real (kind=real_kind)                  :: temperature(np,np,nlev),ps(np,np)
     real (kind=real_kind), dimension(nfl) :: tfull, avg
     real (kind=real_kind) :: dlat
     real (kind=real_kind) :: z, fac
@@ -363,10 +364,6 @@ endif
 #endif
        end if
        tfull(k) = tfull(k) + sat0
-    end do
-
-    do ie=nets,nete
-       elem(ie)%state%ps_v(:,:,:) = p0
     end do
 
     gs = gauss(nlat)
@@ -482,15 +479,11 @@ endif
     ! =======================================
 
     do ie=nets,nete
-       elem(ie)%state%ps_v(:,:,:) =hvcoord%ps0
-       !       elem(ie)%state%ps_v(:,:,nm1)=hvcoord%ps0
-       !       elem(ie)%state%ps_v(:,:,np1)=0.0D0
        elem(ie)%state%phis(:,:) = 0.0D0
        elem(ie)%derived%fm = 0.0D0
        temperature(:,:,:)=t1(:,:,ie,:)
-       do tl=1,timelevels
-          call set_thermostate(elem(ie),temperature,hvcoord,tl,1)
-       enddo
+       ps=p0 
+       call set_thermostate(elem(ie),ps,temperature,hvcoord)
 
     end do
 
