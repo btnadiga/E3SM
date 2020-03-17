@@ -9,7 +9,8 @@ module element_state
 
   implicit none
   private
-  integer, public, parameter :: timelevels = 3
+  ! integer, public, parameter :: timelevels = 3 ! commented out by SXM
+  integer,   public, parameter :: timelevels = 4 ! to go through compilation for all cases when doing BW-PM (ASXM)
 
 
   real (kind=real_kind), allocatable, target, public :: state_Qdp                (:,:,:,:,:,:)    ! (np,np,nlev,qsize_d,2,nelemd)   
@@ -19,6 +20,7 @@ module element_state
 
 
   type, public :: elem_state_t
+
     ! prognostic variables for preqx solver
     ! prognostics must match those in prim_restart_mod.F90
     ! vertically-lagrangian code advects dp3d instead of ps_v
@@ -29,7 +31,32 @@ module element_state
     real (kind=real_kind) :: ps_v(np,np,timelevels)                   ! surface pressure                   4
     real (kind=real_kind) :: phis(np,np)                              ! surface geopotential (prescribed)  5
     real (kind=real_kind) :: Q   (np,np,nlev,qsize_d)                 ! Tracer concentration               6
-    real (kind=real_kind), pointer :: Qdp (:,:,:,:,:)  ! Tracer mass                        7  (np,np,nlev,qsize,2)   
+    ! real (kind=real_kind), pointer :: Qdp (:,:,:,:,:)               ! Tracer mass                        7  (np,np,nlev,qsize,2) (commented out by SXM)
+    real (kind=real_kind) :: Qdp (np,np,nlev,qsize_d,3)               ! Tracer mass (to go through compilation for all cases when doing BW-PM, ASXM)
+
+    ! to go through compilation for all cases when doing BW-PM (ASXM, BEG)
+    real (kind=real_kind) :: w_i (np,np,nlevp,timelevels)             ! vertical velocity at interfaces
+    real (kind=real_kind) :: theta_dp_cp(np,np,nlev,timelevels)       ! potential temperature                       
+    real (kind=real_kind) :: phinh_i(np,np,nlevp,timelevels)          ! geopotential used by NH model at interfaces
+    real (kind=real_kind) :: Fv(np,np,2,nlev)                         ! F-forcing to p
+    real (kind=real_kind) :: v0(np,np,2,nlev)                         ! v-basic state 
+    real (kind=real_kind) :: Fw_i(np,np,nlevp)                        ! F-forcing to w_i
+    real (kind=real_kind) :: w_i0(np,np,nlevp)                        ! w_i-basic state 
+    real (kind=real_kind) :: Ftheta_dp_cp(np,np,nlev)                 ! F-forcing to theta_dp_cp
+    real (kind=real_kind) :: theta_dp_cp0(np,np,nlev)                 ! theta_dp_cp-basic state
+    real (kind=real_kind) :: Fphinh_i(np,np,nlevp)                    ! F-forcing to phinh_i
+    real (kind=real_kind) :: phinh_i0(np,np,nlevp)                    ! phinh_i-basic state
+    real (kind=real_kind) :: Fdp3d(np,np,nlev)                        ! F-forcing to dp3d
+    real (kind=real_kind) :: dp3d0(np,np,nlev)                        ! dp3d-basic state 
+    real (kind=real_kind) :: Fps_v(np,np)                             ! F-forcing to ps_v
+    real (kind=real_kind) :: ps_v0(np,np)                             ! ps_v-basic state
+    real (kind=real_kind) :: FQdp(np,np,nlev,qsize_d)                 ! F-forcing to Qdp
+    real (kind=real_kind) :: Qdp0(np,np,nlev,qsize_d)                 ! Qdp-basic state 
+    real (kind=real_kind) :: prvQ   (np,np,nlev,qsize_d)              ! Tracer concentration in previous nstep
+    real (kind=real_kind) :: FQPM(np,np,nlev,qsize_d)                 ! F-forcing to Q (not named as FQ to avoid the same name used in later part of this F90)
+    real (kind=real_kind) :: Q0PM(np,np,nlev,qsize_d)                 ! Q-basic state  (named to be consistent with FQPM)
+    ! to go through compilation for all cases when doing BW-PM (ASXM, END)
+
   end type elem_state_t
 
   type, public :: derived_state_t

@@ -1314,10 +1314,10 @@ contains
 
               !begin JRUB
               if (nstep==1) then 
-                 elem(ie)%state%Fv(i,j,1) = elem(ie)%state%v(i,j,1,k,nm1) - elem(ie)%state%v(i,j,1,k,np1) !get constant forcing
-                 elem(ie)%state%v0(i,j,1) = elem(ie)%state%v(i,j,1,k,nm1)  !get basic state xbar
-                 elem(ie)%state%Fv(i,j,2) = elem(ie)%state%v(i,j,2,k,nm1) - elem(ie)%state%v(i,j,2,k,np1) !get constant forcing
-                 elem(ie)%state%v0(i,j,2) = elem(ie)%state%v(i,j,2,k,nm1)  !get basic state xbar
+                 ! elem(ie)%state%Fv(i,j,1) = elem(ie)%state%v(i,j,1,k,nm1) - elem(ie)%state%v(i,j,1,k,np1) !get constant forcing ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
+                 ! elem(ie)%state%v0(i,j,1) = elem(ie)%state%v(i,j,1,k,nm1)  !get basic state xbar                                ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
+                 ! elem(ie)%state%Fv(i,j,2) = elem(ie)%state%v(i,j,2,k,nm1) - elem(ie)%state%v(i,j,2,k,np1) !get constant forcing ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
+                 ! elem(ie)%state%v0(i,j,2) = elem(ie)%state%v(i,j,2,k,nm1)  !get basic state xbar                                ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
                  elem(ie)%state%Fp(i,j) = elem(ie)%state%p(i,j,k,nm1) - elem(ie)%state%p(i,j,k,np1) !get constant forcing
                  elem(ie)%state%p0(i,j) = elem(ie)%state%p(i,j,k,nm1)  !get basic state, xbar
                  !if ((nstep==1).AND.(ie==10).AND.(i==2).AND.(j==2)) then 
@@ -1331,8 +1331,8 @@ contains
                  !   xx = elem(ie)%state%p0(2,2)
                  !   print *,nstep,xx,'this is xx JRUB at nstep=10'
                  !end if
-                 elem(ie)%state%v(i,j,1,k,np1) = elem(ie)%state%v(i,j,1,k,np1) + elem(ie)%state%Fv(i,j,1) !this is actually x*
-                 elem(ie)%state%v(i,j,2,k,np1) = elem(ie)%state%v(i,j,2,k,np1) + elem(ie)%state%Fv(i,j,2) !this is actually x*
+                 ! elem(ie)%state%v(i,j,1,k,np1) = elem(ie)%state%v(i,j,1,k,np1) + elem(ie)%state%Fv(i,j,1) !this is actually x* ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
+                 ! elem(ie)%state%v(i,j,2,k,np1) = elem(ie)%state%v(i,j,2,k,np1) + elem(ie)%state%Fv(i,j,2) !this is actually x* ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
                  elem(ie)%state%p(i,j,k,np1) = elem(ie)%state%p(i,j,k,np1) + elem(ie)%state%Fp(i,j) !this is actually x*
               end if
               !end JRUB
@@ -1347,10 +1347,10 @@ contains
   if (nstep.GE.1) then
      do k=1,nlev                                                                                  
         do ie=nets,nete                                                                           
-           vt(:,:,1,ie)=elem(ie)%state%v0(:,:,1)  
-           vt(:,:,2,ie)=elem(ie)%state%v0(:,:,2)  
-           v(:,:,1,ie)=elem(ie)%state%v(:,:,1,k,np1)  
-           v(:,:,2,ie)=elem(ie)%state%v(:,:,2,k,np1)  
+           ! vt(:,:,1,ie)=elem(ie)%state%v0(:,:,1)     ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
+           ! vt(:,:,2,ie)=elem(ie)%state%v0(:,:,2)     ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
+           ! v(:,:,1,ie)=elem(ie)%state%v(:,:,1,k,np1) ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
+           ! v(:,:,2,ie)=elem(ie)%state%v(:,:,2,k,np1) ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
         end do
         l2   = l2_vnorm(elem, v(:,:,:,nets:nete),vt(:,:,:,nets:nete),hybrid,np,nets,nete)
         alpha  = epsilon / l2
@@ -1368,10 +1368,10 @@ contains
            do k=1,nlev                                                                                                             
               do j=1,np                                                                                                             
                  do i=1,np                                                                                                         
-                    elem(ie)%state%v(i,j,1,k,np1) =  alpha * (elem(ie)%state%v(i,j,1,k,np1) - elem(ie)%state%v0(i,j,1)) &
-                         + elem(ie)%state%v0(i,j,1)
-                    elem(ie)%state%v(i,j,2,k,np1) =  alpha * (elem(ie)%state%v(i,j,2,k,np1) - elem(ie)%state%v0(i,j,2)) &
-                         + elem(ie)%state%v0(i,j,2)
+                    ! elem(ie)%state%v(i,j,1,k,np1) =  alpha * (elem(ie)%state%v(i,j,1,k,np1) - elem(ie)%state%v0(i,j,1)) & ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
+                    !      + elem(ie)%state%v0(i,j,1)                                                                       ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
+                    ! elem(ie)%state%v(i,j,2,k,np1) =  alpha * (elem(ie)%state%v(i,j,2,k,np1) - elem(ie)%state%v0(i,j,2)) & ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
+                    !      + elem(ie)%state%v0(i,j,2)                                                                       ! commented out by SXM (for compilation purpose and SW-PM is not useable after this, CSXM)
                     elem(ie)%state%p(i,j,k,np1) =  alpha * (elem(ie)%state%p(i,j,k,np1) - elem(ie)%state%p0(i,j)) &
                          + elem(ie)%state%p0(i,j)
                  end do

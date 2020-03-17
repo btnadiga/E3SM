@@ -212,7 +212,6 @@ CONTAINS
     !-----------------------------------------------------
     !   Add perturbation to the velocity field
     !-----------------------------------------------------
-
     ! Exponential type
     if (pertt .eq. 0) then
       u = u + evaluate_exponential(lon, lat, z)
@@ -264,6 +263,140 @@ CONTAINS
     thetav = t * (1.d0 + Mvap * q) * (p0 / p)**(Rd / cp)
 
   END SUBROUTINE baroclinic_wave_test
+
+  ! ASXM (BEG)
+  ! the same as baroclinic_wave_test, but remove IC perturbations
+  SUBROUTINE baroclinic_wave_test_wopertIC(deep,moist,pertt,X,lon,lat,p,z,zcoords,u,v,t,thetav,phis,ps,rho,q) &
+    BIND(c, name = "baroclinic_wave_test_wopertIC")
+ 
+    IMPLICIT NONE
+
+    ! input/output params parameters at given location
+    INTEGER, INTENT(IN)  :: &
+                deep,       &      ! Deep (1) or Shallow (0) test case
+                moist,      &      ! Moist (1) or Dry (0) test case
+                pertt              ! Perturbation type
+
+    REAL(8), INTENT(IN)  :: &
+                lon,        &      ! Longitude (radians)
+                lat,        &      ! Latitude (radians)
+                X                  ! Earth scaling parameter
+
+    REAL(8), INTENT(INOUT) :: &
+                p,            &    ! Pressure (Pa)
+                z                  ! Altitude (m)
+
+    INTEGER, INTENT(IN) :: zcoords ! 1 if z coordinates are specified
+                                   ! 0 if p coordinates are specified
+
+    REAL(8), INTENT(OUT) :: &
+                u,          &      ! Zonal wind (m s^-1)
+                v,          &      ! Meridional wind (m s^-1)
+                t,          &      ! Temperature (K)
+                thetav,     &      ! Virtual potential temperature (K)
+                phis,       &      ! Surface Geopotential (m^2 s^-2)
+                ps,         &      ! Surface Pressure (Pa)
+                rho,        &      ! density (kg m^-3)
+                q                  ! water vapor mixing ratio (kg/kg)
+
+    ! local variables
+    REAL(8) :: aref, omegaref
+    REAL(8) :: T0, constH, constC, scaledZ, inttau2, rratio
+    REAL(8) :: inttermU, bigU, rcoslat, omegarcoslat
+    REAL(8) :: eta, qratio, qnum, qden
+
+    logical :: pertIC = .false.    ! remove perturbation in IC (ASXM)
+
+    ! pressure and temperature
+    if(zcoords .eq. 1) then
+      CALL evaluate_pressure_temperature(deep, X, lon, lat, z, p, t)
+    else
+      CALL evaluate_z_temperature(deep, X, lon, lat, p, z, t)
+    end if
+
+    ! compute test case constants
+    aref     = a / X
+    omegaref = omega * X
+
+    T0 = 0.5d0 * (T0E + T0P)
+
+    constH = Rd * T0 / g
+
+    constC = 0.5d0 * (K + 2.d0) * (T0E - T0P) / (T0E * T0P)
+
+    scaledZ = z / (B * constH)
+
+    inttau2 = constC * z * exp(- scaledZ**2)
+
+    ! radius ratio
+    if(deep .eq. 0) then
+      rratio = 1.d0
+    else
+      rratio = (z + aref) / aref;
+    end if
+
+    ! initialize surface pressure
+    ps = p0
+
+    ! initialize velocity field
+    inttermU = (rratio * cos(lat))**(K - 1.d0) - (rratio * cos(lat))**(K + 1.d0)
+    bigU = g / aref * K * inttau2 * inttermU * t
+    if (deep .eq. 0) then
+      rcoslat = aref * cos(lat)
+    else
+      rcoslat = (z + aref) * cos(lat)
+    end if
+
+    omegarcoslat = omegaref * rcoslat
+    
+    u = - omegarcoslat + sqrt(omegarcoslat**2 + rcoslat * bigU)
+    v = 0.d0
+
+    ! add perturbation to the velocity field
+    if(pertIC) then ! (ASXM)
+      ! exponential type
+      if (pertt .eq. 0) then
+        u = u + evaluate_exponential(lon, lat, z)
+      ! stream function type
+      elseif (pertt .eq. 1) then
+        u = u - 1.d0 / (2.d0 * dxepsilon) *                     &
+            ( evaluate_streamfunction(lon, lat + dxepsilon, z)  &
+            - evaluate_streamfunction(lon, lat - dxepsilon, z))
+
+        v = v + 1.d0 / (2.d0 * dxepsilon * cos(lat)) *          &
+            ( evaluate_streamfunction(lon + dxepsilon, lat, z)  &
+            - evaluate_streamfunction(lon - dxepsilon, lat, z))
+      end if
+    end if ! (ASXM)
+
+    ! initialize surface geopotential
+    phis = 0.d0
+
+    ! initialize density
+    rho = p / (Rd * t)
+
+    ! initialize specific humidity
+    if(moist .eq. 1) then
+      eta = p/p0
+
+      if (eta .gt. moisttr) then
+        q = moistq0 * exp(- (lat/moistqlat)**4)          &
+                    * exp(- ((eta-1.d0)*p0/moistqp)**2)
+      else
+        q = moistqs
+      end if
+
+      ! convert virtual temperature to temperature
+      t = t / (1.d0 + Mvap * q)
+    else
+      q = 0.d0
+    end if
+
+    ! initialize virtual potential temperature
+    thetav = t * (1.d0 + Mvap * q) * (p0 / p)**(Rd / cp)
+
+  END SUBROUTINE baroclinic_wave_test_wopertIC
+  ! ASXM (END)
 
 !-----------------------------------------------------------------------
 !    Calculate pointwise pressure and temperature

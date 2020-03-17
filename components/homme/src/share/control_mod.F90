@@ -30,6 +30,14 @@ module control_mod
   integer, public :: qsplit = 1           ! ratio of dynamics tsteps to tracer tsteps
   integer, public :: rsplit = 0           ! for vertically lagrangian dynamics, apply remap
                                           ! every rsplit tracer timesteps
+  ! ASXM (BEG)
+  logical, public ::              PM_steady      = .false. ! .true. to generate steady solutions by adding back calculated PM forcings at nstep = 0
+  logical, public ::              PM_steady_drct = .false. ! .true. to generate steady solutions by directly reassigning back the values from previous nstep (PM_steady must also be .true. to have this one functioning)
+  integer, public ::              PM_step        = -1      ! time step frequency to apply power method; deactivate power method with PM_step < 0
+  integer, public ::              PM_stop        = 480000  ! time step at which power method is to be switched off
+  real(kind=real_kind), public :: PM_epsilon     = 1D-5    ! PM parameter epsilon in Peixoto et al. (QJRMS 2017)
+  ! ASXM (END)
+
   integer, public :: LFTfreq=0            ! leapfrog-trapazoidal frequency (shallow water only)
                                           ! interspace a lf-trapazoidal step every LFTfreq leapfrogs    
                                           ! 0 = disabled

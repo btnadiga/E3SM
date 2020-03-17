@@ -74,6 +74,11 @@ module namelist_mod
     maxits,        &
     tol,           &
     debug_level,   &
+    PM_steady,      & ! (ASXM)
+    PM_steady_drct, & ! (ASXM)
+    PM_step,        & ! (ASXM)
+    PM_stop,        & ! (ASXM)
+    PM_epsilon,     & ! (ASXM)
     vert_remap_q_alg
 
 #ifndef CAM
@@ -241,6 +246,11 @@ module namelist_mod
       u_perturb,     &
       rotate_grid,   &
       mesh_file,     &               ! Name of mesh file
+      PM_steady,      & ! (ASXM)
+      PM_steady_drct, & ! (ASXM)
+      PM_step,        & ! (ASXM)
+      PM_stop,        & ! (ASXM)
+      PM_epsilon,     & ! (ASXM)
       vert_remap_q_alg
 
 
@@ -708,6 +718,11 @@ module namelist_mod
     call MPI_bcast(num_io_procs , 1,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(output_type , 9,MPIChar_t,par%root,par%comm,ierr)
     call MPI_bcast(infilenames ,160*MAX_INFILES ,MPIChar_t,par%root,par%comm,ierr)
+    call MPI_bcast(PM_steady,      1, MPIlogical_t, par%root, par%comm, ierr) ! (ASXM)
+    call MPI_bcast(PM_steady_drct, 1, MPIlogical_t, par%root, par%comm, ierr) ! (ASXM)
+    call MPI_bcast(PM_step,        1, MPIinteger_t, par%root, par%comm, ierr) ! (ASXM)
+    call MPI_bcast(PM_stop,        1, MPIinteger_t, par%root, par%comm, ierr) ! (ASXM)
+    call MPI_bcast(PM_epsilon,     1, MPIreal_t,    par%root, par%comm, ierr) ! (ASXM)
 
     ! sanity check on thread count
     ! HOMME will run if if nthreads > max, but gptl will print out GB of warnings.
@@ -913,6 +928,12 @@ module namelist_mod
 #endif
        write(iulog,*)"readnl: qsplit        = ",qsplit
        write(iulog,*)"readnl: vertical remap frequency rsplit (0=disabled): ",rsplit
+
+       write(iulog,*)"readnl: PM_steady      = ",PM_steady      ! (ASXM)
+       write(iulog,*)"readnl: PM_steady_drct = ",PM_steady_drct ! (ASXM)
+       write(iulog,*)"readnl: PM_step        = ",PM_step        ! (ASXM)
+       write(iulog,*)"readnl: PM_stop        = ",PM_stop        ! (ASXM)
+       write(iulog,*)"readnl: PM_epsilon     = ",PM_epsilon     ! (ASXM)
 
        write(iulog,*)"readnl: runtype       = ",runtype
 

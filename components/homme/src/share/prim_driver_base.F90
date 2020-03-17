@@ -1,3 +1,55 @@
+
+!+++++++++++++++++++++++++++
+! Notes on BW-PM (CSXM, BEG)
+!+++++++++++++++++++++++++++
+! Note that the PM here is only for BW, and one needs take the code from JRUB and BN for SW-PM.
+! 1. BW-PM Overview
+!   1) Before doing PM, we should note that the BW integration is a multiple-stage integration depending on tstep_type.
+!   2) For tstep_type=5, it is a 5-stage integration:
+!     a) in stage-1, the results of the first stage integration are saved in timelevel-nm1 once stage-1 is completed.
+!     b) in other words, the prognostic vars after stage-1 saved at timelevel-nm1 is NOT the values from the previous nstep anymore.
+!   3) In PM, as well as to generate steady model solutions for verification purpose, we need access to prognostic vars from the previous nstep (e.g., the nm1 values before the stage-1 integration) 
+!     a) We did this in "PM Section 01: Record nm1 Values" (see the notes there for details).
+!   4) For BW-PM, nstep is indexed from 0, rather than 1. At nstep=0, model integration is the same as for other nsteps, except that the code also needs to deal with initialization.
+!     a) Thus, the PM forcing should be calculated at nstep = 0, rather than nstep = 1.
+!     b) 4a) is verified by generating steady model solutions. 
+!
+! 2. BW-PM Implementation
+!   1) At early time, we implmented PM inside subroutine compute_andor_apply_rhs (by introducing compute_andor_apply_rhs_power) as by JRUB and BN for SW-PM.
+!   2) However, we only can implement PM inside subroutine compute_andor_apply_rhs (by introducing compute_andor_apply_rhs_power) if it is the last step to update prognostic vars. This can be the case for SW (not yet checked) but not for BW.
+!   3) For BW, besides others, subroutines
+!     a) advance_hypervis
+!     b) and/or advance_physical_vis
+!   can be called depends on model configurations (see subroutine prim_advance_exp in prim_advance_mod.F90). In fact, we usually take hypervis_order=2, so that the subroutine advance_hypervis is typically invoked.
+!   4) Because of 3) and when 3a) and/or 3b) are activated we need to put PM in one of them whichever is the one lastly called.
+!   5) Consequently, inside-PM modifications require implementing PM in 
+!     a) compute_andor_apply_rhs
+!     b) advance_hypervis
+!     c) advance_physical_vis,
+!   and whether PM is activated in them depending on whether it is the last called subroutine to update prognostic vars (which depends on model configurations).
+!   6) Clearly, 5) is not only trouble but also messy.
+!   7) Instead, given
+!     a) all prognostic vars are completely updated by the model at the end of subroutine prim_run_subcycle (no matter which subroutine is the last call to update the prognostic vars)
+!     b) all vars needed to PM are avaiable in subroutine prim_run_subcycle after corresponding modificatons of element_state.F90s
+!   we can directly put PM here in subroutine prim_run_subcycle.
+!
+! 3. BW-PM Verification
+! We verified the following PM implementation by successfully generate steady model solutions. However,
+!   1) Any attempts to generate steady model solutions inside the subroutine compute_andor_apply_rhs with hypervis_order=2 cannot go through because the last update of prognostic vars is outside of compute_andor_apply_rhs.
+!   2) We did not try to generate steady model solutions by modifications inside subroutine advance_hypervis or subroutine advance_physical_vis, because modifications inside either of these subroutines are not ideal (should eventually work though).
+!
+! 4. BW-PM Relevant modifications
+!   1) To bring all state-fields avaiable here,
+!     a) we need to modify element_state.F90 for type elem_state_t, a member of type element_t.
+!     b) since HOMME compilation would go through all cases, instead of only modifying element_state.F90 for prim and theta-l (our interests), we need to modify element_state.F90 for all cases
+!       A) pese, B) preqx, C) preqx_acc, D) prim, E) swqex, F) swim, G) theta
+!     to have zero-error compilation of HOMME.
+!     c) nevertheless, even we do not modify element_state.F90 for A) to G), we still can get the theta-l run well, although the compilation for the rest cases will fail.
+!     d) alternatively, one may change the make files to avoid changes in 1-b-A) to 1-b-G), but there are no relevant interests here.
+!+++++++++++++++++++++++++++
+! Notes on BW-PM (CSXM, END)
+!+++++++++++++++++++++++++++
+
 ! ------------------------------------------------------------------------------------------------
 ! prim_driver_mod: 
 !
@@ -138,7 +190,6 @@ contains
     integer total_nelem
     real(kind=real_kind) :: approx_elements_per_task
     type (quadrature_t)   :: gp                     ! element GLL points
-
 
     real (kind=real_kind) ,  allocatable :: coord_dim1(:)
     real (kind=real_kind) ,  allocatable :: coord_dim2(:)
@@ -374,8 +425,6 @@ contains
     if (hthreads>1) call abortmp('Error: hthreads>1 requires -DHORIZ_OPENMP')
 #endif
     
-
-
     ! =================================================================
     ! Initialize shared boundary_exchange and reduction buffers
     ! =================================================================
@@ -833,8 +882,6 @@ contains
 
 !=======================================================================================================!
 
-
-
   subroutine prim_run_subcycle(elem, hybrid,nets,nete, dt, tl, hvcoord,nsubstep)
 
     !   advance dynamic variables and tracers (u,v,T,ps,Q,C) from time t to t + dt_q
@@ -852,6 +899,7 @@ contains
     !       tl%n0    time t + dt_q
 
     use control_mod,        only: statefreq, ftype, qsplit, rsplit, disable_diagnostics
+    use control_mod,        only: use_moisture, PM_steady, PM_steady_drct, PM_step, PM_stop, PM_epsilon ! (ASXM)
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
     use prim_advance_mod,   only: applycamforcing, applycamforcing_dynamics
@@ -862,10 +910,15 @@ contains
 #if USE_OPENACC
     use openacc_utils_mod,  only: copy_qdp_h2d, copy_qdp_d2h
 #endif
+    use physical_constants, only: p0              ! (ASXM)
+    use kinds,              only: rl=>real_kind   ! (ASXM)
+    use dcmip16_wrapper,    only: dcmip2016_test1 ! (ASXM)
+    use global_norms_mod,   only: l2_vnorm        ! (ASXM)
 
     type (element_t) ,    intent(inout) :: elem(:)
     type (hybrid_t),      intent(in)    :: hybrid                       ! distributed parallel structure (shared)
-    type (hvcoord_t),     intent(in)    :: hvcoord                      ! hybrid vertical coordinate struct
+    ! type (hvcoord_t),   intent(in)    :: hvcoord                      ! hybrid vertical coordinate struct ! commented out by SXM
+    type (hvcoord_t),     intent(inout) :: hvcoord                      ! hybrid vertical coordinate struct ! to be consistent on "inout" for hvcoord in other modified subrountines related to PM IC perturbations (ASXM)
     integer,              intent(in)    :: nets                         ! starting thread element number (private)
     integer,              intent(in)    :: nete                         ! ending thread element number   (private)
     real(kind=real_kind), intent(in)    :: dt                           ! "timestep dependent" timestep
@@ -877,8 +930,64 @@ contains
     integer :: ie,i,j,k,n,q,t
     integer :: n0_qdp,np1_qdp,r,nstep_end
     logical :: compute_diagnostics
-    ! compute timesteps for tracer transport and vertical remap
 
+    ! ASXM (BEG)
+    ! IC perturbations
+    logical,  parameter :: pertIC = .true.             ! .true. to add IC perturbation
+
+    ! PM overview 
+    logical :: PM_dp3d                                 ! .true. to PM dp3d
+    logical :: PM_ps_v                                 ! .true. to PM ps_v
+    logical :: PM_Qdp                                  ! .true. to PM Qdp
+    logical :: PM_Q                                    ! .true. to PM Q
+    integer :: PM_debug                                ! for debugging print
+
+    ! PM details
+    integer :: nm1, n0, np1, nstep
+    integer :: ieL                                     ! used when computing l2_norm
+    real(kind=real_kind) :: vt(np,np,2,nlev,nets:nete) ! basic state                        
+    real(kind=real_kind) :: v(np,np,2,nlev,nets:nete)  ! actual velocity
+    real(kind=real_kind) :: alpha, l2 
+
+    ! PM setups
+    PM_dp3d = .true.
+    PM_ps_v = .true.
+    if(use_moisture) then
+      PM_Qdp = .true.
+      PM_Q   = .true.
+    else
+      PM_Qdp = .false.
+      PM_Q   = .false.
+    end if
+    PM_debug = 10 ! the larger the value the more debugging print
+    ! ASXM (END)
+
+    ! DSXM
+    if(PM_debug .GE. 1 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then ! print the following in log files for the first 3 nsteps to check when needed     
+      print *, 'PRS: pertIC=',         pertIC
+      print *, 'PRS: use_moisture=',   use_moisture
+      print *, 'PRS: PM_steady=',      PM_steady
+      print *, 'PRS: PM_steady_drct=', PM_steady_drct
+      print *, 'PRS: PM_step=',        PM_step
+      print *, 'PRS: PM_stop=',        PM_stop
+      print *, 'PRS: PM_epsilon=',     PM_epsilon
+      print *, 'PRS: PM_dp3d=',        PM_dp3d
+      print *, 'PRS: PM_ps_v=',        PM_ps_v
+      print *, 'PRS: PM_Qdp=',         PM_Qdp
+      print *, 'PRS: PM_Q=',           PM_Q
+    end if
+    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then 
+      print *, 'PRSB: v(1,1,1,15,n0)=',  elem(1)%state%v(1,1,1,15,tl%n0)
+      print *, 'PRSB: v(1,1,1,15,nm1)=', elem(1)%state%v(1,1,1,15,tl%nm1)
+      print *, 'PRSB: v(1,1,1,15,np1)=', elem(1)%state%v(1,1,1,15,tl%np1)
+      print *, 'PRSB: v(1,1,1,15,4)=',   elem(1)%state%v(1,1,1,15,4)
+      print *, 'PRSB: Q(1,1,15,1)=',     elem(1)%state%Q(1,1,15,1)
+      print *, 'PRSB: Q(1,1,15,2)=',     elem(1)%state%Q(1,1,15,2)
+      print *, 'PRSB: Q(1,1,15,3)=',     elem(1)%state%Q(1,1,15,3)
+      print *, 'PRSB: Q(1,1,15,4)=',     elem(1)%state%Q(1,1,15,4)
+    end if
+
+    ! compute timesteps for tracer transport and vertical remap
     dt_q      = dt*qsplit
     dt_remap  = dt_q
     nstep_end = tl%nstep + qsplit
@@ -905,24 +1014,135 @@ contains
       call t_stopf("prim_energy_halftimes")
     endif
 
-
     call TimeLevel_Qdp(tl, qsplit, n0_qdp, np1_qdp)
+
+    ! DSXM
+    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then 
+      print *, 'PRS01TLacmp dyTmLv nm1= ', tl%nm1
+      print *, 'PRS01TLacmp dyTmLv n0= ',  tl%n0
+      print *, 'PRS01TLacmp dyTmLv np1= ', tl%np1 
+      print *, 'PRS01TL tmLvQdp n0_qdp=',  n0_qdp
+      print *, 'PRS01TL tmLvQdp np1_qdp=', np1_qdp
+    end if
+    ! DSXM
+
+    ! ASXM (BEG)
+    !+++++++++++++++++++++++++++++++++++++++
+    ! PM Section 01: Record nm1 Values (BEG)
+    !+++++++++++++++++++++++++++++++++++++++
+    ! 1. For PM, we only need to do this at nstep=0 and record the IC in equilibrium to calculate PM forcing.
+    ! 2. For steady model solutions, we need to
+    !   1) do this at each nstep for "direct" steady model solutions (not a strict steady model solution verification, not taken)
+    !   2) but only at nstep=0 for steady model solutions realized by adding back the calculated PM forcing (a strict steady model solution verification, taken).
+    ! 3. Specifically,
+    !   1) for fields with timelevels=3, we raised their timelevels to 4, and used the 4th timelevel to record their values at the end of the previous nstep as indicated by nm1.
+    !   2) for Qdp, which has timelevels=2, we raised the timelevels to 3, and used the 3rd timelevel to record its value at the end of the previous nstep as indicated by n0_qdp.
+    !   3) for Q, it does not have a timelevel-dimension.
+    !     a) we can introduce a time dimension for Q with timelevels=2, and use the 2nd timelevel to record the Q value in the previous nstep.
+    !       A) This approach, however, is not taken, because it will require modifications across the entire model as the dimension of Q is increased from (np,np,nlev,qsize_d) to (np,np,nlev,qsize_d,2).
+    !     b) instead, we did not change Q and introduced the field prvQ to reord Q values in the previous nstep (prvQ has the same dimensions as Q).
+    ! 4. Note that at early time, we did "PM Section 01" in subroutine prim_advance_exp (prim_advance_mod.F90) by introducing subroutine compute_andor_apply_rhs_saveNM1 therein.
+    !  1) this approach worked well for hydrostat-dry simulations,
+    !  2) but it was found hard to do the same operations for non-hydrostatic simulations (at least), because nm1 is not avaiable in the first call to compute_andor_apply_rhs_saveNM1 (tstep_type=7). 
+    !    a) One can try to pass nm1 values there, but trouble and messy.
+    !  3) for wet simulations, it is also not a good idea to do "PM Section 01" in subroutine prim_advance_exp (prim_advance_mod.F90), as the nm1 Q has been partially modified/updated before reaching there.
+    !  4) doing "PM Section 01" here, the nm1 Q is readliy avaiable, and we do not need to worry about dry/wet and hydrostatic/nonhydrostatic.
+    !  5) the statment in 4) was verified by relevant steady model solutions for all combinations of dry/wet and hydrostatic/nonhydrsotatic configurations.
+
+    ! DSXM
+    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then 
+      print *, 'PRSB nstep=',             tl%nstep
+      print *, 'PRSB recording n0=',      tl%n0
+      print *, 'PRSB recording nm1=',     tl%nm1
+      print *, 'PRSB recording np1=',     tl%np1
+      print *, 'PRSB recording n0_qdp=',  n0_qdp
+      print *, 'PRSB recording np1_qdp=', np1_qdp
+    end if
+    ! DSXM
+
+    do ie = nets, nete
+      ! Step01: Process levels 1 to nlev
+      do k = 1, nlev
+        elem(ie)%state%v(:,:,1,k,4)         = elem(ie)%state%v(:,:,1,k,tl%nm1)
+        elem(ie)%state%v(:,:,2,k,4)         = elem(ie)%state%v(:,:,2,k,tl%nm1)
+        elem(ie)%state%w_i(:,:,k,4)         = elem(ie)%state%w_i(:,:,k,tl%nm1)
+        elem(ie)%state%theta_dp_cp(:,:,k,4) = elem(ie)%state%theta_dp_cp(:,:,k,tl%nm1)
+        elem(ie)%state%phinh_i(:,:,k,4)     = elem(ie)%state%phinh_i(:,:,k,tl%nm1)
+        if(PM_dp3d) then
+          elem(ie)%state%dp3d(:,:,k,4)      = elem(ie)%state%dp3d(:,:,k,tl%nm1)
+        end if
+        if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
+          if(PM_ps_v) then
+            elem(ie)%state%ps_v(:,:,4)      = elem(ie)%state%ps_v(:,:,tl%nm1)
+          end if
+        end if
+        if(PM_Qdp) then
+          elem(ie)%state%Qdp(:,:,k,:,3)     = elem(ie)%state%Qdp(:,:,k,:,n0_qdp)
+        end if
+        if(PM_Q) then
+          elem(ie)%state%prvQ(:,:,k,:)      = elem(ie)%state%Q(:,:,k,:)
+        end if
+      end do ! k-loop
+
+      ! Step02: Process the lowest interface nlevp
+      k = nlevp
+      elem(ie)%state%w_i(:,:,k,4)           = elem(ie)%state%w_i(:,:,k,tl%nm1)
+      elem(ie)%state%phinh_i(:,:,k,4)       = elem(ie)%state%phinh_i(:,:,k,tl%nm1)  
+    end do
+    !+++++++++++++++++++++++++++++++++++++++
+    ! PM Section 01: Record nm1 Values (END)
+    !+++++++++++++++++++++++++++++++++++++++
+
+    !++++++++++++++++++++++++++++++++++++++++++
+    ! PM Section 02: Add IC Perturbations (BEG)
+    !++++++++++++++++++++++++++++++++++++++++++
+    ! 1. Rather than introducing IC perturbations in dcmip2016-baroclinic.F90 as in the standard HM.BNBW, it is added here, such that
+    !   1) the PM gets the IC in equilibrium without perturbations to calculate PM forcings ("PM Section 01").
+    !   2) the model still gets the IC perturbations for BW simulations.
+    ! 2. At earlier time (prim_driver_base_PM_04ICPertMovedNotNeat.F90), we
+    !   1) removed BW IC perturbations in dcmip2016-baroclinic.F90
+    !   2) and introduced IC perturbations here, but did not adjust other fields coupled/related to the IC perturbations.
+    ! 3. However, the IC perturbations are actually coupled with other fields, 
+    !   1) the generated IC+perturbations by 2. is thus different with the standard HM.BNBW, although the difference is minimal.
+    !   2) we can bring here more details to adjust other fields coupled/related to the IC perturbations, but it is 
+    !     a) trouble
+    !     b) messy 
+    !     c) and non-flexible (need to mannually change code here or add additional namelist options when changing configurations)
+    ! 4. Instead, we
+    !   1) added subroutine baroclinic_wave_test_wopertIC in dcmip2016-baroclinic.F90
+    !   2) added subroutine dcmip2016_test1_wopertIC in dcmip16_wrapper.F90
+    !   3) rather than calling subroutine dcmip2016_test1 in subroutine set_test_initial_conditions (test_mod.F90), we called subroutine dcmip2016_test1_wopertIC there.
+    !   4) 1)-3) thus initialize the model as no perturbations are in the IC (equilibrium state), such that the "PM Section 01" can record this equilibrium IC for the calculation of PM forcings.
+    !   5) in the following, we re-call the default subroutine dcmip2016_test1 to "re-initialize" the model such that the model get the IC+perturbations for the rest of model integrations.
+    ! 5. Relevant experiments demonstrated that this approach produces BFB results to the standard HM.BNBW runs.
+    ! 6. Relevant call graph in the standard HM.BNBW is 
+    !   1) prim_init2 (prim_driver_base.F90) --> set_test_initial_conditions (test_mod.F90) --> dcmip2016_test1 (dcmip16_wrapper.F90) --> baroclinic_wave_test (within ie,k,j,i loops); set_elem_state (after ie,k,j,i loops) (dcmip2016-baroclinic.F90)
+    if(pertIC .and. tl%nstep==0) then
+      call dcmip2016_test1(elem, hybrid, hvcoord, nets, nete) ! this subroutine dcmip2016_test1 only conducts initialization
+    end if
+    !++++++++++++++++++++++++++++++++++++++++++
+    ! PM Section 02: Add IC Perturbations (END)
+    !++++++++++++++++++++++++++++++++++++++++++
+    ! ASXM (END)
+
+    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) print *, 'PRS: HOMME test case forcing not yet applied; will notify in the next if does' ! DSXM
 #ifndef CAM
     ! Apply HOMME test case forcing
     call compute_test_forcing(elem,hybrid,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete,tl)
+    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) print *, 'PRS: HOMME test case forcing applied' ! DSXM
 #endif
 
     ! Apply CAM Physics forcing
-
     !   ftype= 2: Q was adjusted by physics, but apply u,T forcing here
     !   ftype= 1: forcing was applied time-split in CAM coupling layer
     !   ftype= 0: apply all forcing here
     !   ftype=-1: do not apply forcing
+    ! For dry hydrostatic BW, ftype = 0 (CSXM)
+    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) print *, 'PRS: ftype=', ftype ! DSXM      
     if (ftype==0) then
       call t_startf("ApplyCAMForcing")
       call ApplyCAMForcing(elem, hvcoord,tl%n0,n0_qdp, dt_remap,nets,nete)
       call t_stopf("ApplyCAMForcing")
-
     elseif (ftype==2) then
       call t_startf("ApplyCAMForcing_dynamics")
       call ApplyCAMForcing_dynamics(elem, hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete)
@@ -949,7 +1169,6 @@ contains
        enddo
     enddo
 
-
 #if (USE_OPENACC)
 !    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
     call t_startf("copy_qdp_h2d")
@@ -962,7 +1181,7 @@ contains
     call prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord,compute_diagnostics,1)
     call t_stopf("prim_step_rX")
 
-    do r=2,rsplit
+    do r=2,rsplit ! not functioning as we take rsplit = 1 (CSXM)
        call TimeLevel_update(tl,"leapfrog")
        call t_startf("prim_step_rX")
        call prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord,.false.,r)
@@ -971,6 +1190,15 @@ contains
     ! defer final timelevel update until after remap and diagnostics
     !compute timelevels for tracers (no longer the same as dynamics)
     call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
+    ! DSXM
+    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then 
+      print *, 'PRS02TLacmp dyTmLv nm1= ', tl%nm1
+      print *, 'PRS02TLacmp dyTmLv n0= ',  tl%n0
+      print *, 'PRS02TLacmp dyTmLv np1= ', tl%np1 
+      print *, 'PRS02TL tmLvQdp n0_qdp=',  n0_qdp
+      print *, 'PRS02TL tmLvQdp np1_qdp=', np1_qdp
+    end if      
+    ! DSXM
 
 #if (USE_OPENACC)
     call t_startf("copy_qdp_h2d")
@@ -984,7 +1212,6 @@ contains
     !  if rsplit>0:  also remap dynamics and compute reference level ps_v
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     call vertical_remap(hybrid,elem,hvcoord,dt_remap,tl%np1,np1_qdp,nets,nete)
-
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! time step is complete.  update some diagnostic variables:
@@ -1000,7 +1227,7 @@ contains
                ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,tl%np1)
           !dir$ simd
           do q=1,qsize
-             elem(ie)%state%Q(:,:,k,q)=elem(ie)%state%Qdp(:,:,k,q,np1_qdp)/dp_np1(:,:)
+            elem(ie)%state%Q(:,:,k,q)=elem(ie)%state%Qdp(:,:,k,q,np1_qdp)/dp_np1(:,:)
           enddo
        enddo
     enddo
@@ -1022,6 +1249,304 @@ contains
       call t_stopf("prim_energy_halftimes")
     endif
 
+    ! ASXM (BEG)
+    nm1   = tl%nm1
+    n0    = tl%n0
+    np1   = tl%np1
+    nstep = tl%nstep
+    do ie = nets, nete
+
+      !+++++++++++++++++++++++++++++++++++++++++
+      ! PM Section 03: PM EQS B4,B5 and B6 (BEG)
+      !+++++++++++++++++++++++++++++++++++++++++
+      !++++++++++++++++
+      ! Part 01: EQ B4
+      !++++++++++++++++
+      ! Step01: Process levels 1 to nlev
+      do k = 1, nlev
+        ! calculate F and define basic state        
+        ! 1) F is calculated as F = xbar - G(xbar) at nstep=0,  with xbar<-->timelevel-4, timelevel-3 or prvQ depending on the fields, and G(xbar)<-->np1.
+        ! 2) at nstep=0, IC without perturbation is stored at timelevel-4, timelevel-3 or prvQ; the basic state xbar therefore refers to IC without perturbation which is in equilibrium for BW.
+        ! 3) take u, i.e., elem(ie)%state%v(:,:,1,k,timelevels), as an example
+        !   a) xbar    = elem(ie)%state%v(:,:,1,k,4)
+        !   b) G(xbar) = elem(ie)%state%v(:,:,1,k,np1), corresponding to G(xk) = x(k+1) with xk == xbar, such that taking value at np1, np1_qdp or implicitly the "next nstep" for Q.
+        if(nstep .EQ. 0) then ! for both PM and steady model solutions
+          elem(ie)%state%Fv(:,:,1,k)            = elem(ie)%state%v(:,:,1,k,4)         - elem(ie)%state%v(:,:,1,k,np1)         ! constant forcing xbar-G(xbar)
+          elem(ie)%state%v0(:,:,1,k)            = elem(ie)%state%v(:,:,1,k,4)                                                 ! basic state xbar
+          elem(ie)%state%Fv(:,:,2,k)            = elem(ie)%state%v(:,:,2,k,4)         - elem(ie)%state%v(:,:,2,k,np1)         ! constant forcing xbar-G(xbar)
+          elem(ie)%state%v0(:,:,2,k)            = elem(ie)%state%v(:,:,2,k,4)                                                 ! basic state xbar
+          elem(ie)%state%Fw_i(:,:,k)            = elem(ie)%state%w_i(:,:,k,4)         - elem(ie)%state%w_i(:,:,k,np1)         ! constant forcing xbar-G(xbar)
+          elem(ie)%state%w_i0(:,:,k)            = elem(ie)%state%w_i(:,:,k,4)                                                 ! basic state xbar
+          elem(ie)%state%Ftheta_dp_cp(:,:,k)    = elem(ie)%state%theta_dp_cp(:,:,k,4) - elem(ie)%state%theta_dp_cp(:,:,k,np1) ! constant forcing xbar-G(xbar)
+          elem(ie)%state%theta_dp_cp0(:,:,k)    = elem(ie)%state%theta_dp_cp(:,:,k,4)                                         ! basic state xbar
+          elem(ie)%state%Fphinh_i(:,:,k)        = elem(ie)%state%phinh_i(:,:,k,4)     - elem(ie)%state%phinh_i(:,:,k,np1)     ! constant forcing xbar-G(xbar)
+          elem(ie)%state%phinh_i0(:,:,k)        = elem(ie)%state%phinh_i(:,:,k,4)                                             ! basic state xbar
+          if(PM_dp3d) then
+            elem(ie)%state%Fdp3d(:,:,k)         = elem(ie)%state%dp3d(:,:,k,4)        - elem(ie)%state%dp3d(:,:,k,np1)        ! constant forcing xbar-G(xbar)
+            elem(ie)%state%dp3d0(:,:,k)         = elem(ie)%state%dp3d(:,:,k,4)                                                ! basic state xbar
+          end if
+          if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
+            if(PM_ps_v) then
+              elem(ie)%state%Fps_v(:,:)         = elem(ie)%state%ps_v(:,:,4)          - elem(ie)%state%ps_v(:,:,np1)          ! constant forcing xbar-G(xbar)
+              elem(ie)%state%ps_v0(:,:)         = elem(ie)%state%ps_v(:,:,4)                                                  ! basic state, xbar
+            end if
+          end if
+          if(PM_Qdp) then
+            elem(ie)%state%FQdp(:,:,k,:)        = elem(ie)%state%Qdp(:,:,k,:,3)       - elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   ! constant forcing xbar-G(xbar)
+            elem(ie)%state%Qdp0(:,:,k,:)        = elem(ie)%state%Qdp(:,:,k,:,3)                                               ! basic state xbar
+          end if
+          if(PM_Q) then
+            elem(ie)%state%FQPM(:,:,k,:)        = elem(ie)%state%prvQ(:,:,k,:)        - elem(ie)%state%Q(:,:,k,:)             ! constant forcing xbar-G(xbar)
+            elem(ie)%state%Q0PM(:,:,k,:)        = elem(ie)%state%prvQ(:,:,k,:)                                                ! basic state xbar
+          end if
+        end if
+
+        ! calculate/update prognostic vars using Eq. B4 (Peixoto et al., QJRMS 2017) instead of only the PDE solver 
+        ! 1) according to BN, 
+        !   a) the model is not used for physical calculation when power method is activated.
+        !   b) we do not activate power method when the model is for physical calculation.
+        ! 2) take u, i.e., elem(ie)%state%v(:,:,1,k,timelevels), as an example
+        !   a) G(xk) = elem(ie)%state%v(:,:,1,k,np1), corresponding to G(xk) = x(k+1) such that taking value at np1
+        !   b) F = results from nstep=0, i.e., elem(ie)%state%Fv(:,:,1,k)
+        if((PM_step .GT. 0) .and. (nstep .GE. 1) .and. (MOD((nstep+1), PM_step) .EQ. 0) .AND. (nstep .LT. PM_stop)) then      ! PM not applied at nstep=0 (see handnotes on why mod((nstep+1), PM_step)=0, instead of mod(nstep, PM_step)=0)
+          elem(ie)%state%v(:,:,1,k,np1)         = elem(ie)%state%v(:,:,1,k,np1)         + elem(ie)%state%Fv(:,:,1,k)          ! actually x*; Eq. B4: x* = G(xk) + F
+          elem(ie)%state%v(:,:,2,k,np1)         = elem(ie)%state%v(:,:,2,k,np1)         + elem(ie)%state%Fv(:,:,2,k)          ! actually x*; Eq. B4: x* = G(xk) + F
+          elem(ie)%state%w_i(:,:,k,np1)         = elem(ie)%state%w_i(:,:,k,np1)         + elem(ie)%state%Fw_i(:,:,k)          ! actually x*; Eq. B4: x* = G(xk) + F
+          elem(ie)%state%theta_dp_cp(:,:,k,np1) = elem(ie)%state%theta_dp_cp(:,:,k,np1) + elem(ie)%state%Ftheta_dp_cp(:,:,k)  ! actually x*; Eq. B4: x* = G(xk) + F
+          elem(ie)%state%phinh_i(:,:,k,np1)     = elem(ie)%state%phinh_i(:,:,k,np1)     + elem(ie)%state%Fphinh_i(:,:,k)      ! actually x*; Eq. B4: x* = G(xk) + F
+          if(PM_dp3d) then
+            elem(ie)%state%dp3d(:,:,k,np1)      = elem(ie)%state%dp3d(:,:,k,np1)        + elem(ie)%state%Fdp3d(:,:,k)         ! actually x*; Eq. B4: x* = G(xk) + F
+          end if
+          if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
+            if(PM_ps_v) then
+              elem(ie)%state%ps_v(:,:,np1)      = elem(ie)%state%ps_v(:,:,np1)          + elem(ie)%state%Fps_v(:,:)           ! actually x*; Eq. B4: x* = G(xk) + F
+            end if
+          end if
+          if(PM_Qdp) then
+            elem(ie)%state%Qdp(:,:,k,:,np1_qdp) = elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   + elem(ie)%state%FQdp(:,:,k,:)        ! actually x*; Eq. B4: x* = G(xk) + F
+          end if
+          if(PM_Q) then
+            elem(ie)%state%Q(:,:,k,:)           = elem(ie)%state%Q(:,:,k,:)             + elem(ie)%state%FQPM(:,:,k,:)        ! actually x*; Eq. B4: x* = G(xk) + F
+          end if
+        end if
+      end do
+
+      ! Step02: Process the lowest interface nlevp
+      k = nlevp
+      if(nstep .EQ. 0) then ! for both PM and steady model solutions
+        elem(ie)%state%Fw_i(:,:,k)              = elem(ie)%state%w_i(:,:,k,4)           - elem(ie)%state%w_i(:,:,k,np1)       ! constant forcing xbar-G(xbar)
+        elem(ie)%state%w_i0(:,:,k)              = elem(ie)%state%w_i(:,:,k,4)                                                 ! basic state xbar
+        elem(ie)%state%Fphinh_i(:,:,k)          = elem(ie)%state%phinh_i(:,:,k,4)       - elem(ie)%state%phinh_i(:,:,k,np1)   ! constant forcing xbar-G(xbar)
+        elem(ie)%state%phinh_i0(:,:,k)          = elem(ie)%state%phinh_i(:,:,k,4)                                             ! basic state xbar
+      end if
+      if((PM_step .GT. 0) .and. (nstep .GE. 1) .and. (MOD((nstep+1), PM_step) .EQ. 0) .AND. (nstep .LT. PM_stop)) then        ! PM not applied at nstep=0 (see handnotes on why mod((nstep+1), PM_step)=0, instead of mod(nstep, PM_step)=0)
+        elem(ie)%state%w_i(:,:,k,np1)           = elem(ie)%state%w_i(:,:,k,np1)         + elem(ie)%state%Fw_i(:,:,k)          ! actually x*; Eq. B4: x* = G(xk) + F
+        elem(ie)%state%phinh_i(:,:,k,np1)       = elem(ie)%state%phinh_i(:,:,k,np1)     + elem(ie)%state%Fphinh_i(:,:,k)      ! actually x*; Eq. B4: x* = G(xk) + F
+      end if
+
+      ! debug
+      if(PM_debug .GE. 100) then
+        do k = 1, nlev
+        do j = 1, np
+        do i = 1, np
+          if(elem(ie)%state%dp3d(i,j,k,np1) .lt. -10.0) then
+            print *, 'PM EqB4: nstep=', nstep, ' i=', i, ' j=', j, ' k=', k, ' elem(ie)%state%dp3d(i,j,k,np1)=', elem(ie)%state%dp3d(i,j,k,np1)
+          end if
+        end do
+        end do
+        end do
+      end if
+
+      !++++++++++++++++++++++++
+      ! Part 02: EQs B5 and B6
+      !++++++++++++++++++++++++
+      ! compute the norm of r = x* - xbar, with x*=v (actual velocity) and xbar = vt (basic state velocity), then adjust (Eqs. B5-B6, Peixoto et al., QJRMS 2017)
+      if((PM_step .GT. 0) .and. (nstep .GE. 1) .and. (MOD((nstep+1), PM_step) .EQ. 0) .AND. (nstep .LT. PM_stop)) then ! PM not applied at nstep=0 (see handnotes on why mod((nstep+1), PM_step)=0, instead of mod(nstep, PM_step)=0)
+        ! get alpha
+        do ieL = nets, nete
+          vt(:, :, 1, :, ieL) = elem(ieL)%state%v0(:, :, 1, :)      ! basic state u
+          vt(:, :, 2, :, ieL) = elem(ieL)%state%v0(:, :, 2, :)      ! basic state v
+          v (:, :, 1, :, ieL) = elem(ieL)%state%v (:, :, 1, :, np1) ! actual u
+          v (:, :, 2, :, ieL) = elem(ieL)%state%v (:, :, 2, :, np1) ! actual v 
+        end do
+        l2    = l2_vnorm(elem, v(:,:,:,:,nets:nete), vt(:,:,:,:,nets:nete), hybrid, np, nets, nete) ! all levels together (CSXM)
+        alpha = PM_epsilon / l2
+
+        ! DSXM
+        ! check whether l2, such that alpha, are globally the same for all tiles (yes)
+        if(PM_debug .GE. 1 .and. ie .EQ. 1 .and. nstep .LE. 360) then
+          print *, 'l2=',    l2
+          print *, 'alpha=', alpha
+        end if
+        ! DSXM
+
+        ! adjust and update x estimates from x*, r, and xbar (Eqs. B5-B6, Peixoto et al., QJRMS 2017)
+        ! Eq. B5: r(k+1) = x* - xbar
+        ! Eq. B6: x(k+1) = alpha * r(k+1) + xbar
+        ! 1) Take u, i.e., elem(ie)%state%v(:,:,1,k,timelevels), as an example
+        !   a) x*    = elem(ie)%state%v(:,:,1,k,np1), i.e., results from the most recent calculation as above
+        !   b) xbar  = elem(ie)%state%v0(:,:,1,k)
+        !   c) alpha = PM_epsilon / l2, i.e., results from the most recent calculation as above
+        !   d) r     = x*-xbar = elem(ie)%state%v(:,:,1,k,np1) - elem(ie)%state%v0(:,:,1,k)
+        ! Step01: Process levels 1 to nlev
+        do k = 1, nlev
+          elem(ie)%state%v(:,:,1,k,np1)         = alpha * (elem(ie)%state%v(:,:,1,k,np1)         - elem(ie)%state%v0(:,:,1,k))         & ! Eqs. B5-B6
+                                                + elem(ie)%state%v0(:,:,1,k)
+          elem(ie)%state%v(:,:,2,k,np1)         = alpha * (elem(ie)%state%v(:,:,2,k,np1)         - elem(ie)%state%v0(:,:,2,k))         & ! Eqs. B5-B6
+                                                + elem(ie)%state%v0(:,:,2,k)
+          elem(ie)%state%w_i(:,:,k,np1)         = alpha * (elem(ie)%state%w_i(:,:,k,np1)         - elem(ie)%state%w_i0(:,:,k))         & ! Eqs. B5-B6
+                                                + elem(ie)%state%w_i0(:,:,k)
+          elem(ie)%state%theta_dp_cp(:,:,k,np1) = alpha * (elem(ie)%state%theta_dp_cp(:,:,k,np1) - elem(ie)%state%theta_dp_cp0(:,:,k)) & ! Eqs. B5-B6
+                                                + elem(ie)%state%theta_dp_cp0(:,:,k)
+          elem(ie)%state%phinh_i(:,:,k,np1)     = alpha * (elem(ie)%state%phinh_i(:,:,k,np1)     - elem(ie)%state%phinh_i0(:,:,k))     & ! Eqs. B5-B6
+                                                + elem(ie)%state%phinh_i0(:,:,k)
+          if(PM_dp3d) then
+            elem(ie)%state%dp3d(:,:,k,np1)      = alpha * (elem(ie)%state%dp3d(:,:,k,np1)        - elem(ie)%state%dp3d0(:,:,k))        & ! Eqs. B5-B6
+                                                + elem(ie)%state%dp3d0(:,:,k)
+          end if
+          if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
+            if(PM_ps_v) then
+              elem(ie)%state%ps_v(:,:,np1)      = alpha * (elem(ie)%state%ps_v(:,:,np1)          - elem(ie)%state%ps_v0(:,:))          & ! Eqs. B5-B6
+                                                + elem(ie)%state%ps_v0(:,:)
+            end if
+          end if
+          if(PM_Qdp) then
+            elem(ie)%state%Qdp(:,:,k,:,np1_qdp) = alpha * (elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   - elem(ie)%state%Qdp0(:,:,k,:))       & ! Eqs. B5-B6
+                                                + elem(ie)%state%Qdp0(:,:,k,:)
+          end if
+          if(PM_Q) then
+            elem(ie)%state%Q(:,:,k,:)           = alpha * (elem(ie)%state%Q(:,:,k,:)             - elem(ie)%state%Q0PM(:,:,k,:))       & ! Eqs. B5-B6
+                                                + elem(ie)%state%Q0PM(:,:,k,:)
+          end if
+        end do ! k-loop
+
+        ! Step02: Process the lowest interface nlevp
+        k = nlevp
+        elem(ie)%state%w_i(:,:,k,np1)          = alpha * (elem(ie)%state%w_i(:,:,k,np1)          - elem(ie)%state%w_i0(:,:,k))         & ! Eqs. B5-B6
+                                               + elem(ie)%state%w_i0(:,:,k)
+        elem(ie)%state%phinh_i(:,:,k,np1)      = alpha * (elem(ie)%state%phinh_i(:,:,k,np1)      - elem(ie)%state%phinh_i0(:,:,k))     & ! Eqs. B5-B6
+                                               + elem(ie)%state%phinh_i0(:,:,k)
+
+        ! debug
+        if(PM_debug .GE. 100) then
+          do k = 1, nlev
+          do j = 1, np
+          do i = 1, np
+            if(elem(ie)%state%dp3d(i,j,k,np1) .lt. -10.0) then
+              print *, 'PM EqsB5B6: nstep=', nstep, ' i=', i, ' j=', j, ' k=', k, ' elem(ie)%state%dp3d(i,j,k,np1)=', elem(ie)%state%dp3d(i,j,k,np1)
+            end if
+          end do 
+          end do
+          end do
+        end if
+      end if ! adjust and update every PM_step endif
+      !+++++++++++++++++++++++++++++++++++++++++
+      ! PM Section 03: PM EQS B4,B5 and B6 (END)
+      !+++++++++++++++++++++++++++++++++++++++++
+
+      !+++++++++++++++++++++++++++++++++++++++++++++++
+      ! PM Section 04: Steady State Verification (BEG)
+      !+++++++++++++++++++++++++++++++++++++++++++++++
+      ! Verify whether all prognostic vars are included in the implemented PM
+      !   1) if all prognostic vars are accounted for here, the model solution without IC perturbations should be steady due to the following operations.
+      !   2) if one or more prognostic vars are missed here, the model solution without IC perturbations cannot be steady even after the following operations.
+      ! PM_steady
+      if(PM_steady) then
+        ! Step01: Process levels 1 to nlev
+        do k = 1, nlev
+          if(PM_debug .GE. 100 .and. nstep .le. 15 .and. ie .eq. nets .and. k .eq. 15 .and. hybrid%masterthread) then
+            print *, 'PRS: ', nstep, 'target v(:,:,1,15,4)=', elem(ie)%state%v(:,:,1,15,4)
+            print *, 'PRS: ', nstep, 'Fv(:,:,1,15)        =', elem(ie)%state%Fv(:,:,1,15)  
+            print *, 'PRS: ', nstep, 'bf+F v(:,:,1,15,np1)=', elem(nets)%state%v(:,:,1,15,np1)  
+          end if
+          elem(ie)%state%v(:,:,1,k,np1)         = elem(ie)%state%v(:,:,1,k,np1)         + elem(ie)%state%Fv(:,:,1,k)         
+          elem(ie)%state%v(:,:,1,k,n0)          = elem(ie)%state%v(:,:,1,k,4)
+          elem(ie)%state%v(:,:,1,k,nm1)         = elem(ie)%state%v(:,:,1,k,np1)
+          elem(ie)%state%v(:,:,2,k,np1)         = elem(ie)%state%v(:,:,2,k,np1)         + elem(ie)%state%Fv(:,:,2,k)         
+          elem(ie)%state%v(:,:,2,k,n0)          = elem(ie)%state%v(:,:,2,k,4)
+          elem(ie)%state%v(:,:,2,k,nm1)         = elem(ie)%state%v(:,:,2,k,np1)
+          elem(ie)%state%w_i(:,:,k,np1)         = elem(ie)%state%w_i(:,:,k,np1)         + elem(ie)%state%Fw_i(:,:,k)         
+          elem(ie)%state%w_i(:,:,k,n0)          = elem(ie)%state%w_i(:,:,k,4)
+          elem(ie)%state%w_i(:,:,k,nm1)         = elem(ie)%state%w_i(:,:,k,np1)
+          elem(ie)%state%theta_dp_cp(:,:,k,np1) = elem(ie)%state%theta_dp_cp(:,:,k,np1) + elem(ie)%state%Ftheta_dp_cp(:,:,k) 
+          elem(ie)%state%theta_dp_cp(:,:,k,n0)  = elem(ie)%state%theta_dp_cp(:,:,k,4)
+          elem(ie)%state%theta_dp_cp(:,:,k,nm1) = elem(ie)%state%theta_dp_cp(:,:,k,np1)
+          elem(ie)%state%phinh_i(:,:,k,np1)     = elem(ie)%state%phinh_i(:,:,k,np1)     + elem(ie)%state%Fphinh_i(:,:,k)    
+          elem(ie)%state%phinh_i(:,:,k,n0)      = elem(ie)%state%phinh_i(:,:,k,4)
+          elem(ie)%state%phinh_i(:,:,k,nm1)     = elem(ie)%state%phinh_i(:,:,k,np1)
+          if(PM_dp3d) then
+            elem(ie)%state%dp3d(:,:,k,np1)      = elem(ie)%state%dp3d(:,:,k,np1)        + elem(ie)%state%Fdp3d(:,:,k)              
+            elem(ie)%state%dp3d(:,:,k,n0)       = elem(ie)%state%dp3d(:,:,k,4)
+            elem(ie)%state%dp3d(:,:,k,nm1)      = elem(ie)%state%dp3d(:,:,k,np1)
+          end if
+          if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
+            if(PM_ps_v) then
+              elem(ie)%state%ps_v(:,:,np1)      = elem(ie)%state%ps_v(:,:,np1)          + elem(ie)%state%Fps_v(:,:) 
+              elem(ie)%state%ps_v(:,:,n0)       = elem(ie)%state%ps_v(:,:,4)
+              elem(ie)%state%ps_v(:,:,nm1)      = elem(ie)%state%ps_v(:,:,np1)
+            end if
+          end if
+          if(PM_Qdp) then
+            elem(ie)%state%Qdp(:,:,k,:,np1_qdp) = elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   + elem(ie)%state%FQdp(:,:,k,:)              
+            elem(ie)%state%Qdp(:,:,k,:,n0_qdp)  = elem(ie)%state%Qdp(:,:,k,:,3)
+          end if
+          if(PM_Q) then
+            elem(ie)%state%Q(:,:,k,:)           = elem(ie)%state%Q(:,:,k,:)             + elem(ie)%state%FQPM(:,:,k,:)              
+          end if
+  
+          ! DSXM
+          if(PM_debug .GE. 100 .and. nstep .le. 15 .and. ie .eq. nets .and. k .eq. 15 .and. hybrid%masterthread) then
+            print *, 'PRS: ', nstep, 'af+F v(:,:,1,15,np1)=',  elem(nets)%state%v(:,:,1,15,np1)                  
+          end if
+          ! DSXM
+        end do
+         
+        ! Step02: Process the lowest interface nlevp
+        k = nlevp
+        elem(ie)%state%w_i(:,:,k,np1)     = elem(ie)%state%w_i(:,:,k,np1)     + elem(ie)%state%Fw_i(:,:,k)            
+        elem(ie)%state%w_i(:,:,k,n0)      = elem(ie)%state%w_i(:,:,k,4)
+        elem(ie)%state%w_i(:,:,k,nm1)     = elem(ie)%state%w_i(:,:,k,np1)
+        elem(ie)%state%phinh_i(:,:,k,np1) = elem(ie)%state%phinh_i(:,:,k,np1) + elem(ie)%state%Fphinh_i(:,:,k)
+        elem(ie)%state%phinh_i(:,:,k,n0)  = elem(ie)%state%phinh_i(:,:,k,4)
+        elem(ie)%state%phinh_i(:,:,k,nm1) = elem(ie)%state%phinh_i(:,:,k,np1)
+      end if
+
+      ! PM_steady_drct
+      if(PM_steady_drct) then 
+        ! Step01: Process levels 1 to nlev
+        do k = 1, nlev
+          elem(ie)%state%v(:,:,1,k,np1)         = elem(ie)%state%v(:,:,1,k,4)
+          elem(ie)%state%v(:,:,2,k,np1)         = elem(ie)%state%v(:,:,2,k,4)
+          elem(ie)%state%w_i(:,:,k,np1)         = elem(ie)%state%w_i(:,:,k,4)
+          elem(ie)%state%theta_dp_cp(:,:,k,np1) = elem(ie)%state%theta_dp_cp(:,:,k,4)
+          elem(ie)%state%phinh_i(:,:,k,np1)     = elem(ie)%state%phinh_i(:,:,k,4)
+          if(PM_dp3d) then
+            elem(ie)%state%dp3d(:,:,k,np1)      = elem(ie)%state%dp3d(:,:,k,4)
+          end if
+          if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
+            if(PM_ps_v) then
+              elem(ie)%state%ps_v(:,:,np1)      = elem(ie)%state%ps_v(:,:,4)
+            end if
+          end if
+          if(PM_Qdp) then
+            elem(ie)%state%Qdp(:,:,k,:,np1_qdp) = elem(ie)%state%Qdp(:,:,k,:,3)
+          end if
+          if(PM_Q) then
+            elem(ie)%state%Q(:,:,k,:)           = elem(ie)%state%prvQ(:,:,k,:)
+          end if
+        end do
+
+        ! Step02: Process the lowest interface nlevp
+        k = nlevp
+        elem(ie)%state%w_i(:,:,k,np1)     = elem(ie)%state%w_i(:,:,k,4)
+        elem(ie)%state%phinh_i(:,:,k,np1) = elem(ie)%state%phinh_i(:,:,k,4)
+      end if ! PM_steady endif
+      !+++++++++++++++++++++++++++++++++++++++++++++++
+      ! PM Section 04: Steady State Verification (END)
+      !+++++++++++++++++++++++++++++++++++++++++++++++
+
+    end do ! ie loop
+    ! ASXM (END)
 
     ! =================================
     ! update dynamics time level pointers
@@ -1031,6 +1556,28 @@ contains
     !   u(nm1)   dynamics at  t+dt_remap - dt       
     !   u(n0)    dynamics at  t+dt_remap
     !   u(np1)   undefined
+    ! DSXM
+    if(PM_debug .GE. 10 .and. nstep .LE. 6 .and. hybrid%masterthread) then 
+      print *, 'PRS03TL dyTmLv nm1= ',         tl%nm1
+      print *, 'PRS03TL dyTmLv n0= ',          tl%n0
+      print *, 'PRS03TL dyTmLv np1= ',         tl%np1   
+      print *, 'PRS03TLacmp tmLvQdp n0_qdp=',  n0_qdp
+      print *, 'PRS03TLacmp tmLvQdp np1_qdp=', np1_qdp
+    end if
+    ! DSXM
+
+    ! DSXM
+    if(PM_debug .GE. 10 .and. nstep .LE. 6 .and. hybrid%masterthread) then 
+      print *, 'PRSE: v(1,1,1,15,n0)=',  elem(1)%state%v(1,1,1,15,tl%n0)
+      print *, 'PRSE: v(1,1,1,15,nm1)=', elem(1)%state%v(1,1,1,15,tl%nm1)
+      print *, 'PRSE: v(1,1,1,15,np1)=', elem(1)%state%v(1,1,1,15,tl%np1)
+      print *, 'PRSE: v(1,1,1,15,4)=',   elem(1)%state%v(1,1,1,15,4)
+      print *, 'PRSE: Q(1,1,15,1)=',     elem(1)%state%Q(1,1,15,1)
+      print *, 'PRSE: Q(1,1,15,2)=',     elem(1)%state%Q(1,1,15,2)
+      print *, 'PRSE: Q(1,1,15,3)=',     elem(1)%state%Q(1,1,15,3)
+      print *, 'PRSE: Q(1,1,15,4)=',     elem(1)%state%Q(1,1,15,4)
+    end if
+    ! DSXM
 
     ! ============================================================
     ! Print some diagnostic information
@@ -1084,7 +1631,21 @@ contains
     real (kind=real_kind) :: dp_np1(np,np)
     logical :: compute_diagnostics
 
+    ! ASXM (BEG)
+    integer :: PM_debug ! the higher value the more debugging print
+    PM_debug = 10
+    ! ASXM (END)
+
     dt_q = dt*qsplit
+
+    ! DSXM
+    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then
+      print *, 'prim_stepB: v(1,1,1,15,n0)=',  elem(1)%state%v(1,1,1,15,tl%n0)
+      print *, 'prim_stepB: v(1,1,1,15,nm1)=', elem(1)%state%v(1,1,1,15,tl%nm1)
+      print *, 'prim_stepB: v(1,1,1,15,np1)=', elem(1)%state%v(1,1,1,15,tl%np1)
+      print *, 'prim_stepB: v(1,1,1,15,4)=',   elem(1)%state%v(1,1,1,15,4)
+    end if
+    ! DSXM
  
     ! ===============
     ! initialize mean flux accumulation variables and save some variables at n0
@@ -1141,6 +1702,16 @@ contains
       call Prim_Advec_Tracers_remap(elem, deriv1,hvcoord,hybrid,dt_q,tl,nets,nete)
       call t_stopf("PAT_remap")
     end if
+
+    ! DSXM
+    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then
+      print *, 'prim_stepE: v(1,1,1,15,n0)=',  elem(1)%state%v(1,1,1,15,tl%n0)
+      print *, 'prim_stepE: v(1,1,1,15,nm1)=', elem(1)%state%v(1,1,1,15,tl%nm1)
+      print *, 'prim_stepE: v(1,1,1,15,np1)=', elem(1)%state%v(1,1,1,15,tl%np1)
+      print *, 'prim_stepE: v(1,1,1,15,4)=',   elem(1)%state%v(1,1,1,15,4)
+    end if
+    ! DSXM
+
     call t_stopf("prim_step_advec")
 
   end subroutine prim_step
