@@ -13,7 +13,7 @@ module vertremap_mod
   use parallel_mod, only           : abortmp, parallel_t
   use control_mod, only : vert_remap_q_alg
   use element_ops, only : set_theta_ref
-  use eos, only : get_dry_phinh
+  use eos, only : phi_from_eos
   implicit none
   private
   public :: vertical_remap
@@ -110,14 +110,14 @@ contains
         !call set_theta_ref(hvcoord,dp_star,theta_ref)
 
         ! remove hydrostatic phi befor remap
-        call get_dry_phinh(hvcoord,elem(ie)%state%phis,elem(ie)%state%theta_dp_cp(:,:,:,np1),dp_star,phi_ref)
+        call phi_from_eos(hvcoord,elem(ie)%state%phis,elem(ie)%state%vtheta_dp(:,:,:,np1),dp_star,phi_ref)
         elem(ie)%state%phinh_i(:,:,:,np1)=&
              elem(ie)%state%phinh_i(:,:,:,np1) -phi_ref(:,:,:)
  
         !  REMAP u,v,T from levels in dp3d() to REF levels
         ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_star
         ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_star
-        ttmp(:,:,:,3)=elem(ie)%state%theta_dp_cp(:,:,:,np1)   ! - theta_ref*dp_star*Cp
+        ttmp(:,:,:,3)=elem(ie)%state%vtheta_dp(:,:,:,np1)   ! - theta_ref*dp_star*Cp
         do k=1,nlev
            ttmp(:,:,k,4)=elem(ie)%state%phinh_i(:,:,k+1,np1)-&
                 elem(ie)%state%phinh_i(:,:,k,np1) 
@@ -134,7 +134,7 @@ contains
         !call set_theta_ref(hvcoord,dp,theta_ref)
         elem(ie)%state%v(:,:,1,:,np1)=ttmp(:,:,:,1)/dp
         elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)/dp
-        elem(ie)%state%theta_dp_cp(:,:,:,np1)=ttmp(:,:,:,3) ! + theta_ref*dp*Cp
+        elem(ie)%state%vtheta_dp(:,:,:,np1)=ttmp(:,:,:,3) ! + theta_ref*dp*Cp
       
         
         do k=nlev,1,-1
@@ -145,7 +145,7 @@ contains
         enddo
 
         ! depends on theta, so do this after updating theta:
-        call get_dry_phinh(hvcoord,elem(ie)%state%phis,elem(ie)%state%theta_dp_cp(:,:,:,np1),dp,phi_ref)
+        call phi_from_eos(hvcoord,elem(ie)%state%phis,elem(ie)%state%vtheta_dp(:,:,:,np1),dp,phi_ref)
         elem(ie)%state%phinh_i(:,:,:,np1)=&
              elem(ie)%state%phinh_i(:,:,:,np1)+phi_ref(:,:,:)
 
@@ -163,7 +163,17 @@ contains
        call remap1(elem(ie)%state%Qdp(:,:,:,:,np1_qdp),np,qsize,dp_star,dp)
        call t_stopf('vertical_remap1_3')
 
+       !dir$ simd
+       do q=1,qsize
+          elem(ie)%state%Q(:,:,:,q)=elem(ie)%state%Qdp(:,:,:,q,np1_qdp)/dp(:,:,:)
+       enddo
      endif
+
+     ! reinitialize dp3d after remap
+     do k=1,nlev    
+        elem(ie)%state%dp3d(:,:,:,np1)=dp(:,:,:)
+     enddo
+
   enddo
   call t_stopf('vertical_remap')
   end subroutine vertical_remap

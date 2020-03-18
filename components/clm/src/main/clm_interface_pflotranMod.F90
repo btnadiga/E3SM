@@ -13,7 +13,7 @@ module clm_interface_pflotranMod
 
 !----------------------------------------------------------------------------------------------
 ! NGEE-Arctic CLM-PFLOTRAN soil Thermal-Hydrology & bgC coupling interface
-! authors: Fengming YUAN1, Gautam Bishit1,2, and Guoping Tang1
+! authors: Fengming YUAN1, Gautam Bisht1,2, and Guoping Tang1
 !
 !          1.Climate Change Science Institute & Environmental Science Division
 !          Oak Ridge National Laboratory
@@ -3639,12 +3639,12 @@ contains
   !
   ! ! calculating BGC state variable changes over one time-step (rates)
   !   NOTE: Don't update the organic C/N state variables, which will be updated in those 'update' subroutines
-  !           and the 'CNSoilLittVertTranspMod.F90' after 'update1'.
+  !           and the 'SoilLittVertTranspMod.F90' after 'update1'.
   !
   subroutine update_soil_bgc_pf2clm(clm_interface_data, bounds, filters, ifilter)
 ! TODO: add phosphorus vars
     use ColumnType              , only : col_pp
-    use clm_varctl              , only : iulog, use_ed
+    use clm_varctl              , only : iulog, use_fates
     use CNDecompCascadeConType  , only : decomp_cascade_con
     use clm_varpar              , only : ndecomp_pools, nlevdecomp_full
     use clm_varctl              , only : pf_hmode
@@ -4563,7 +4563,7 @@ contains
     !
     ! !USES:
     use clm_time_manager, only : get_step_size, get_nstep
-    use clm_varctl      , only : iulog, use_ed
+    use clm_varctl      , only : iulog, use_fates
     use clm_varpar      , only : ndecomp_pools, nlevdecomp, nlevdecomp_full
     use clm_varcon      , only : dzsoi_decomp
     ! !ARGUMENTS:
@@ -4626,7 +4626,7 @@ contains
         end if
     end do
 
-    if (.not. use_ed) then
+    if (.not. use_fates) then
          if (err_found) then
             fc = err_index
             write(iulog,'(A,70(1h-))')">>>--------  PFLOTRAN Mass Balance Check:beg  "
@@ -4636,7 +4636,7 @@ contains
                                     pf_cinputs(fc)*dtime,pf_coutputs(fc)*dtime,pf_cbeg(fc),pf_cend(fc)
             write(iulog,'(A,70(1h-))')">>>--------  PFLOTRAN Mass Balance Check:end  "
          end if
-    end if !(.not. use_ed)
+    end if !(.not. use_fates)
     end associate
     end subroutine clm_pf_CBalanceCheck
 !--------------------------------------------------------------------------------------
@@ -4648,7 +4648,7 @@ contains
     !
     ! !USES:
     use clm_time_manager, only : get_step_size,get_nstep
-    use clm_varctl      , only : iulog, use_ed
+    use clm_varctl      , only : iulog, use_fates
     use clm_varpar      , only : ndecomp_pools, nlevdecomp, nlevdecomp_full
     use clm_varcon      , only : dzsoi_decomp
     ! !ARGUMENTS:
@@ -4832,7 +4832,7 @@ contains
         end do
     end do
 
-    if (.not. use_ed) then
+    if (.not. use_fates) then
          if (err_found) then
             fc = err_index
             write(iulog,'(A,70(1h-))')">>>--------  PFLOTRAN Mass Balance Check:beg  "
@@ -4874,7 +4874,7 @@ contains
 !            end do
             write(iulog,'(A,70(1h-))')">>>--------  PFLOTRAN Mass Balance Check:end  "
         end if
-    end if !(.not. use_ed)
+    end if !(.not. use_fates)
     end associate
     end subroutine clm_pf_NBalanceCheck
 !--------------------------------------------------------------------------------------

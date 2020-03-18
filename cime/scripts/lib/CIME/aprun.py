@@ -28,19 +28,19 @@ def _get_aprun_cmd_for_case_impl(ntasks, nthreads, rootpes, pstrids,
     >>> pio_async_interface = False
     >>> compiler = "pgi"
     >>> machine = "titan"
-    >>> run_exe = "acme.exe"
+    >>> run_exe = "e3sm.exe"
     >>> _get_aprun_cmd_for_case_impl(ntasks, nthreads, rootpes, pstrids, max_tasks_per_node, max_mpitasks_per_node, pio_numtasks, pio_async_interface, compiler, machine, run_exe)
-    (' -S 4 -n 680 -N 8 -d 2 acme.exe : -S 2 -n 128 -N 4 -d 4 acme.exe ', 117, 808, 4, 4)
+    (' -S 4 -n 680 -N 8 -d 2 e3sm.exe : -S 2 -n 128 -N 4 -d 4 e3sm.exe ', 117, 808, 4, 4)
     >>> compiler = "intel"
     >>> _get_aprun_cmd_for_case_impl(ntasks, nthreads, rootpes, pstrids, max_tasks_per_node, max_mpitasks_per_node, pio_numtasks, pio_async_interface, compiler, machine, run_exe)
-    (' -S 4 -cc numa_node -n 680 -N 8 -d 2 acme.exe : -S 2 -cc numa_node -n 128 -N 4 -d 4 acme.exe ', 117, 808, 4, 4)
+    (' -S 4 -cc numa_node -n 680 -N 8 -d 2 e3sm.exe : -S 2 -cc numa_node -n 128 -N 4 -d 4 e3sm.exe ', 117, 808, 4, 4)
 
     >>> ntasks = [64, 64, 64, 64, 64, 64, 64, 64, 1]
     >>> nthreads = [1, 1, 1, 1, 1, 1, 1, 1, 1]
     >>> rootpes = [0, 0, 0, 0, 0, 0, 0, 0, 0]
     >>> pstrids = [1, 1, 1, 1, 1, 1, 1, 1, 1]
     >>> _get_aprun_cmd_for_case_impl(ntasks, nthreads, rootpes, pstrids, max_tasks_per_node, max_mpitasks_per_node, pio_numtasks, pio_async_interface, compiler, machine, run_exe)
-    (' -S 8 -cc numa_node -n 64 -N 16 -d 1 acme.exe ', 4, 64, 16, 1)
+    (' -S 8 -cc numa_node -n 64 -N 16 -d 1 e3sm.exe ', 4, 64, 16, 1)
     """
     max_tasks_per_node = 1 if max_tasks_per_node < 1 else max_tasks_per_node
 
@@ -108,7 +108,7 @@ def _get_aprun_cmd_for_case_impl(ntasks, nthreads, rootpes, pstrids,
     return aprun_args, total_node_count, total_task_count, min_tasks_per_node, max_thread_count
 
 ###############################################################################
-def get_aprun_cmd_for_case(case, run_exe):
+def get_aprun_cmd_for_case(case, run_exe, overrides=None):
 ###############################################################################
     """
     Given a case, construct and return the aprun command and optimized node count
@@ -120,9 +120,19 @@ def get_aprun_cmd_for_case(case, run_exe):
         for the_list, item_name in zip([ntasks, nthreads, rootpes, pstrids],
                                        ["NTASKS", "NTHRDS", "ROOTPE", "PSTRID"]):
             the_list.append(case.get_value("_".join([item_name, model])))
+    max_tasks_per_node = case.get_value("MAX_TASKS_PER_NODE")
+    if overrides:
+        if 'max_tasks_per_node' in overrides:
+            max_tasks_per_node = overrides['max_tasks_per_node'] 
+        if 'total_tasks' in overrides:
+            ntasks = [overrides['total_tasks'] if x > 1 else x for x in ntasks]
+        if 'thread_count' in overrides:
+            nthreads = [overrides['thread_count'] if x > 1 else x for x in nthreads]
+    
+
 
     return _get_aprun_cmd_for_case_impl(ntasks, nthreads, rootpes, pstrids,
-                                        case.get_value("MAX_TASKS_PER_NODE"),
+                                        max_tasks_per_node,
                                         case.get_value("MAX_MPITASKS_PER_NODE"),
                                         case.get_value("PIO_NUMTASKS"),
                                         case.get_value("PIO_ASYNC_INTERFACE"),
