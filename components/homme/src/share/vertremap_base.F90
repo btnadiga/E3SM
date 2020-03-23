@@ -100,11 +100,15 @@ subroutine remap1(Qdp,nx,qsize,dp1,dp2)
                             lt1,lt2,lt3,t0,t1,t2,t3,t4,tm,tp,ie,i,ilev,j,jk,k,q
   logical :: abort=.false.
 
+  q = vert_remap_q_alg
+  if ( (q.ne.-1) .and. (q.ne.0) .and. (q.ne.1) .and. (q.ne.2) .and. (q.ne.3) .and. (q.ne.10) )&
+     call abortmp('Bad vert_remap_q_alg value. Use -1, 0, 1, 2, 3, or 10.')
+
   if (vert_remap_q_alg == -1) then
      call remap1_nofilter(qdp,nx,qsize,dp1,dp2)
      return
   endif
-  if (vert_remap_q_alg == 1 .or. vert_remap_q_alg == 2 .or. vert_remap_q_alg == 3) then
+  if (vert_remap_q_alg == 1 .or. vert_remap_q_alg == 2 .or. vert_remap_q_alg == 3 .or. vert_remap_q_alg == 10) then
      call remap_Q_ppm(qdp,nx,qsize,dp1,dp2)
      return
   endif
@@ -534,7 +538,7 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
   real(kind=real_kind), dimension(3,     nlev   ) :: coefs  !PPM coefficients within each cell
   real(kind=real_kind), dimension(       nlev   ) :: z1, z2
   real(kind=real_kind) :: ppmdx(10,0:nlev+1)  !grid spacings
-  real(kind=real_kind) :: mymass, massn1, massn2
+  real(kind=real_kind) :: mymass, massn1, massn2, ext(2)
   integer :: i, j, k, q, kk, kid(nlev)
 
   call t_startf('remap_Q_ppm')
@@ -572,10 +576,14 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
       do k = 1 , nlev
         kk = k  !Keep from an order n^2 search operation by assuming the old cell index is close.
         !Find the index of the old grid cell in which this new cell's bottom interface resides.
-        do while ( pio(kk) <= pin(k+1) )
-          kk = kk + 1
-        enddo
-        kk = kk - 1                   !kk is now the cell index we're integrating over.
+        if (pio(kk) <= pin(k+1)) then
+           do while ( pio(kk) <= pin(k+1) )
+              kk = kk + 1
+           enddo
+           kk = kk - 1                   !kk is now the cell index we're integrating over.
+        else
+           call binary_search(pio, pin(k+1), kk)
+        end if
         if (kk == nlev+1) kk = nlev   !This is to keep the indices in bounds.
                                       !Top bounds match anyway, so doesn't matter what coefficients are used
         kid(k) = kk                   !Save for reuse
@@ -587,12 +595,7 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
 
       !This turned out a big optimization, remembering that only parts of the PPM algorithm depends on the data, namely the
       !limiting. So anything that depends only on the grid is pre-computed outside the tracer loop.
-      if (vert_remap_q_alg == 1) then
-         ! call old version only for BFB compatibility
-         ppmdx(:,:) = compute_ppm_grids_old( dpo )
-      else
-         ppmdx(:,:) = compute_ppm_grids( dpo )
-      endif
+      ppmdx(:,:) = compute_ppm_grids( dpo )
 
       !From here, we loop over tracers for only those portions which depend on tracer data, which includes PPM limiting and
       !mass accumulation
@@ -608,15 +611,23 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
           ao(k) = ao(k) / dpo(k)        !Divide out the old grid spacing because we want the tracer mixing ratio, not mass.
         enddo
         !Fill in ghost values. Ignored if vert_remap_q_alg == 2
-        do k = 1 , gs
-          if (vert_remap_q_alg == 3) then
-             ao(1   -k) = ao(1)
-             ao(nlev+k) = ao(nlev)
-          elseif (vert_remap_q_alg == 2 .or. vert_remap_q_alg == 1) then   !Ignored if vert_remap_q_alg == 2
-             ao(1   -k) = ao(       k)
-             ao(nlev+k) = ao(nlev+1-k)
-          endif
-        enddo
+        if (vert_remap_q_alg >= 1 .and. vert_remap_q_alg <= 3) then
+           do k = 1 , gs
+              if (vert_remap_q_alg == 3) then
+                 ao(1   -k) = ao(1)
+                 ao(nlev+k) = ao(nlev)
+              elseif (vert_remap_q_alg == 2 .or. vert_remap_q_alg == 1)then   !Ignored if vert_remap_q_alg == 2
+                 ao(1   -k) = ao(       k)
+                 ao(nlev+k) = ao(nlev+1-k)
+              endif
+            enddo
+         elseif (vert_remap_q_alg == 10) then
+            ext(1) = minval(ao(1:nlev))
+            ext(2) = maxval(ao(1:nlev))
+            call linextrap(dpo(2), dpo(1), dpo(0), dpo(-1), ao(2), ao(1), ao(0), ao(-1), ext(1), ext(2))
+            call linextrap(dpo(nlev-1), dpo(nlev), dpo(nlev+1), dpo(nlev+2),&
+                 ao(nlev-1), ao(nlev), ao(nlev+1), ao(nlev+2), ext(1), ext(2))
+         endif
         !Compute monotonic and conservative PPM reconstruction over every cell
         coefs(:,:) = compute_ppm( ao , ppmdx )
         !Compute tracer values on the new grid by integrating from the old cell bottom to the new
@@ -636,53 +647,6 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
   call t_stopf('remap_Q_ppm')
 end subroutine remap_Q_ppm
 
-
-!=======================================================================================================!
-
-! New version supports q_alg=3 but is not BFB with old code with -O3 optimization
-! old version should be removed seperate commit with tests rebaselined
-
-!THis compute grid-based coefficients from Collela & Woodward 1984.
-function compute_ppm_grids_old( dx )   result(rslt)
-  use control_mod, only: vert_remap_q_alg
-  implicit none
-  real(kind=real_kind), intent(in) :: dx(-1:nlev+2)  !grid spacings
-  real(kind=real_kind)             :: rslt(10,0:nlev+1)  !grid spacings
-  integer :: j
-  integer :: indB, indE
-
-  !Calculate grid-based coefficients for stage 1 of compute_ppm
-  if (vert_remap_q_alg == 2) then
-    indB = 2
-    indE = nlev-1
-  else
-    indB = 0
-    indE = nlev+1
-  endif
-  do j = indB , indE
-    rslt( 1,j) = dx(j) / ( dx(j-1) + dx(j) + dx(j+1) )
-    rslt( 2,j) = ( 2.*dx(j-1) + dx(j) ) / ( dx(j+1) + dx(j) )
-    rslt( 3,j) = ( dx(j) + 2.*dx(j+1) ) / ( dx(j-1) + dx(j) )
-  enddo
-
-  !Caculate grid-based coefficients for stage 2 of compute_ppm
-  if (vert_remap_q_alg == 2) then
-    indB = 2
-    indE = nlev-2
-  else
-    indB = 0
-    indE = nlev
-  endif
-  do j = indB , indE
-    rslt( 4,j) = dx(j) / ( dx(j) + dx(j+1) )
-    rslt( 5,j) = 1. / sum( dx(j-1:j+2) )
-    rslt( 6,j) = ( 2. * dx(j+1) * dx(j) ) / ( dx(j) + dx(j+1 ) )
-    rslt( 7,j) = ( dx(j-1) + dx(j  ) ) / ( 2. * dx(j  ) + dx(j+1) )
-    rslt( 8,j) = ( dx(j+2) + dx(j+1) ) / ( 2. * dx(j+1) + dx(j  ) )
-    rslt( 9,j) = dx(j  ) * ( dx(j-1) + dx(j  ) ) / ( 2.*dx(j  ) +    dx(j+1) )
-    rslt(10,j) = dx(j+1) * ( dx(j+1) + dx(j+2) ) / (    dx(j  ) + 2.*dx(j+1) )
-  enddo
-end function compute_ppm_grids_old
 
 !THis compute grid-based coefficients from Collela & Woodward 1984.
 function compute_ppm_grids( dx )   result(rslt)
@@ -758,7 +722,8 @@ function compute_ppm( a , dx )    result(coefs)
     !Computed these coefficients from the edge values and cell mean in Maple. Assumes normalized coordinates: xi=(x-x0)/dx
     coefs(0,j) = 1.5 * a(j) - ( al + ar ) / 4.
     coefs(1,j) = ar - al
-    coefs(2,j) = -6. * a(j) + 3. * ( al + ar )
+    ! coefs(2,j) = -6. * a(j) + 3. * ( al + ar )
+    coefs(2,j) = 3. * (-2. * a(j) + ( al + ar ))
   enddo
 
   !If vert_remap_q_alg == 2, use piecewise constant in the boundaries, and don't use ghost cells.
@@ -781,16 +746,59 @@ function integrate_parabola( a , x1 , x2 )    result(mass)
   real(kind=real_kind), intent(in) :: x1      !lower domain bound for integration
   real(kind=real_kind), intent(in) :: x2      !upper domain bound for integration
   real(kind=real_kind)             :: mass
-  mass = a(0) * (x2 - x1) + a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1 + a(2) * (x2 ** 3 - x1 ** 3) / 0.3D1
+  mass = a(0) * (x2 - x1) + a(1) * (x2 * x2 - x1 * x1) / 0.2D1 + a(2) * (x2 * x2 * x2 - x1 * x1 * x1) / 0.3D1
 end function integrate_parabola
 
 
 !=============================================================================================!
 
+  ! Find k such that pio(k) <= pivot < pio(k+1). Provide a reasonable input
+  ! value for k.
+  subroutine binary_search(pio, pivot, k)
+    real(kind=real_kind), intent(in) :: pio(nlev+2), pivot
+    integer, intent(inout) :: k
+    integer :: lo, hi, mid
+
+    if (pio(k) > pivot) then
+       lo = 1
+       hi = k
+    else
+       lo = k
+       hi = nlev+2
+    end if
+    do while (hi > lo + 1)
+       k = (lo + hi)/2
+       if (pio(k) > pivot) then
+          hi = k
+       else
+          lo = k
+       end if
+    end do
+    k = lo
+  end subroutine binary_search
+
+
+  subroutine linextrap(dx1,dx2,dx3,dx4,y1,y2,y3,y4,lo,hi)
+    real(kind=real_kind), intent(in) :: dx1,dx2,dx3,dx4,y1,y2,lo,hi
+    real(kind=real_kind), intent(out) :: y3,y4
+
+    real(kind=real_kind), parameter :: half = 0.5d0
+
+    real(kind=real_kind) :: x1,x2,x3,x4,a
+
+    x1 = half*dx1
+    x2 = x1 + half*(dx1 + dx2)
+    x3 = x2 + half*(dx2 + dx3)
+    x4 = x3 + half*(dx3 + dx4)
+
+    a  = (x3-x1)/(x2-x1)
+    y3 = (1-a)*y1 + a*y2
+    a  = (x4-x1)/(x2-x1)
+    y4 = (1-a)*y1 + a*y2
+
+    y3 = max(lo, min(hi, y3))
+    y4 = max(lo, min(hi, y4))
+  end subroutine linextrap
 
 
 end module vertremap_base
-
-
-
-

@@ -4,7 +4,7 @@ Interface to the config_machines.xml file.  This class inherits from GenericXML.
 from CIME.XML.standard_module_setup import *
 from CIME.XML.generic_xml import GenericXML
 from CIME.XML.files import Files
-from CIME.utils import convert_to_unknown_type
+from CIME.utils import convert_to_unknown_type, get_cime_config
 
 import socket
 
@@ -23,6 +23,7 @@ class Machines(GenericXML):
         self.machine_node = None
         self.machine = None
         self.machines_dir = None
+        self.custom_settings = {}
         schema = None
         if files is None:
             files = Files()
@@ -46,10 +47,19 @@ class Machines(GenericXML):
             if "CIME_MACHINE" in os.environ:
                 machine = os.environ["CIME_MACHINE"]
             else:
-                machine = self.probe_machine_name()
+                cime_config = get_cime_config()
+                if cime_config.has_option("main", "machine"):
+                    machine = cime_config.get("main", "machine")
+                if machine is None:
+                    machine = self.probe_machine_name()
 
         expect(machine is not None, "Could not initialize machine object from {} or {}".format(infile, local_infile))
         self.set_machine(machine)
+
+    def get_child(self, name=None, attributes=None, root=None, err_msg=None):
+        if root is None:
+            root = self.machine_node
+        return super(Machines, self).get_child(name, attributes, root, err_msg)
 
     def get_machines_dir(self):
         """
@@ -67,7 +77,7 @@ class Machines(GenericXML):
         """
         Return the names of all the child nodes for the target machine
         """
-        nodes = self.get_children(root=self.machine_node, no_validate=True)
+        nodes = self.get_children(root=self.machine_node)
         node_names = []
         for node in nodes:
             node_names.append(self.name(node))
@@ -150,18 +160,19 @@ class Machines(GenericXML):
         >>> machobj = Machines(machine="melvin")
         >>> machobj.get_machine_name()
         'melvin'
-        >>> machobj.set_machine("trump")
+        >>> machobj.set_machine("trump") # doctest: +IGNORE_EXCEPTION_DETAIL
         Traceback (most recent call last):
         ...
-        SystemExit: ERROR: No machine trump found
+        CIMEError: ERROR: No machine trump found
         """
         if machine == "Query":
             self.machine = machine
         elif self.machine != machine or self.machine_node is None:
-            self.machine_node = self.get_child("machine", {"MACH" : machine}, err_msg="No machine {} found".format(machine))
+            self.machine_node = super(Machines,self).get_child("machine", {"MACH" : machine}, err_msg="No machine {} found".format(machine))
             self.machine = machine
 
         return machine
+
     #pylint: disable=arguments-differ
     def get_value(self, name, attributes=None, resolved=True, subgroup=None):
         """
@@ -170,6 +181,9 @@ class Machines(GenericXML):
         expect(self.machine_node is not None, "Machine object has no machine defined")
         expect(subgroup is None, "This class does not support subgroups")
         value = None
+
+        if name in self.custom_settings:
+            return self.custom_settings[name]
 
         # COMPILER and MPILIB are special, if called without arguments they get the default value from the
         # COMPILERS and MPILIBS lists in the file.
@@ -181,10 +195,6 @@ class Machines(GenericXML):
             node = self.get_optional_child(name, root=self.machine_node, attributes=attributes)
             if node is not None:
                 value = self.text(node)
-
-        if value is None:
-            # if all else fails
-            value = GenericXML.get_value(self, name)
 
         if resolved:
             if value is not None:
@@ -224,7 +234,13 @@ class Machines(GenericXML):
         """
         Get the compiler to use from the list of COMPILERS
         """
-        return self.get_field_from_list("COMPILERS")
+        cime_config = get_cime_config()
+        if cime_config.has_option('main','COMPILER'):
+            value = cime_config.get('main', 'COMPILER')
+            expect(self.is_valid_compiler(value), "User-selected compiler {} is not supported on machine {}".format(value, self.machine))
+        else:
+            value = self.get_field_from_list("COMPILERS")
+        return value
 
     def get_default_MPIlib(self, attributes=None):
         """
@@ -236,7 +252,7 @@ class Machines(GenericXML):
         """
         Check the compiler is valid for the current machine
 
-        >>> machobj = Machines(machine="edison")
+        >>> machobj = Machines(machine="cori-knl")
         >>> machobj.get_default_compiler()
         'intel'
         >>> machobj.is_valid_compiler("gnu")
@@ -250,7 +266,7 @@ class Machines(GenericXML):
         """
         Check the MPILIB is valid for the current machine
 
-        >>> machobj = Machines(machine="edison")
+        >>> machobj = Machines(machine="cori-knl")
         >>> machobj.is_valid_MPIlib("mpi-serial")
         True
         >>> machobj.is_valid_MPIlib("fake-mpi")
@@ -263,7 +279,7 @@ class Machines(GenericXML):
         """
         Return if this machine has a batch system
 
-        >>> machobj = Machines(machine="edison")
+        >>> machobj = Machines(machine="cori-knl")
         >>> machobj.has_batch_system()
         True
         >>> machobj.set_machine("melvin")
@@ -288,13 +304,8 @@ class Machines(GenericXML):
         return None
 
     def set_value(self, vid, value, subgroup=None, ignore_type=True):
-        tmproot = self.root
-        self.root = self.machine_node
-        result = super(Machines, self).set_value(vid, value, subgroup=subgroup,
-                                               ignore_type=ignore_type)
-        self.root = tmproot
-        return result
-
+        # A temporary cache only
+        self.custom_settings[vid] = value
 
     def print_values(self):
         # write out machines
@@ -315,3 +326,25 @@ class Machines(GenericXML):
                 print("      pes/node       ",self.text(max_mpitasks_per_node))
             if max_tasks_per_node is not None:
                 print("      max_tasks/node ",self.text(max_tasks_per_node))
+
+    def return_values(self):
+        """ return a dictionary of machine info
+        This routine is used by external tools in https://github.com/NCAR/CESM_xml2html
+        """
+        machines = self.get_children("machine")
+        mach_dict = dict()
+        logger.debug("Machines return values")
+        for machine in machines:
+            name = self.get(machine, "MACH")
+            desc = self.get_child("DESC", root=machine)
+            mach_dict[(name,"description")] = self.text(desc)
+            os_  = self.get_child("OS", root=machine)
+            mach_dict[(name,"os")] = self.text(os_)
+            compilers = self.get_child("COMPILERS", root=machine)
+            mach_dict[(name,"compilers")] = self.text(compilers)
+            max_tasks_per_node = self.get_child("MAX_TASKS_PER_NODE", root=machine)
+            mach_dict[(name,"max_tasks_per_node")] = self.text(max_tasks_per_node)
+            max_mpitasks_per_node = self.get_child("MAX_MPITASKS_PER_NODE", root=machine)
+            mach_dict[(name,"max_mpitasks_per_node")] = self.text(max_mpitasks_per_node)
+
+        return mach_dict

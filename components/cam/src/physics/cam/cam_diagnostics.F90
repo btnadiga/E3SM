@@ -22,7 +22,6 @@ use phys_control,  only: phys_getopts
 use wv_saturation, only: qsat, qsat_water, svp_ice
 use time_manager,  only: is_first_step
 
-use scamMod,       only: single_column, wfld
 use cam_abortutils,    only: endrun
 
 implicit none
@@ -309,6 +308,9 @@ subroutine diag_init()
    call addfld ('T9251000',horiz_only,   'A','K','Temperature difference 925 mb - 1000 mb') 
    call addfld ('TH9251000',horiz_only,   'A','K','Theta difference 925 mb - 1000 mb')   
    call addfld ('THE9251000',horiz_only,   'A','K','ThetaE difference 925 mb - 1000 mb') 
+
+   call addfld ('U90M',horiz_only,    'A','m/s','Zonal wind at turbine hub height (90m above surface)')
+   call addfld ('V90M',horiz_only,    'A','m/s','Meridional wind at turbine hub height (90m above surface)')
 
    ! This field is added by radiation when full physics is used
    if ( ideal_phys )then
@@ -835,7 +837,7 @@ end subroutine diag_conv_tend_ini
 !-----------------------------------------------------------------------
     use physconst,          only: gravit, rga, rair, cpair, latvap, rearth, pi, cappa
     use time_manager,       only: get_nstep
-    use interpolate_data,   only: vertinterp
+    use interpolate_data,   only: vertinterp, vertinterpz
     use constituent_burden, only: constituent_burden_comp
     use cam_control_mod,    only: moist_physics
     use co2_cycle,          only: c_i, co2_transport
@@ -907,7 +909,7 @@ end subroutine diag_conv_tend_ini
 
 
 
-#if (defined BFB_CAM_SCAM_IOP )
+#if (defined E3SM_SCM_REPLAY )
     call outfld('phis    ',state%phis,    pcols,   lchnk     )
 #endif
 
@@ -1063,13 +1065,9 @@ end subroutine diag_conv_tend_ini
 
 ! Vertical velocity and advection
 
-    if (single_column) then
-       call outfld('OMEGA   ',wfld,    pcols,   lchnk     )
-    else
-       call outfld('OMEGA   ',state%omega,    pcols,   lchnk     )
-    endif
+    call outfld('OMEGA   ',state%omega,    pcols,   lchnk     )
 
-#if (defined BFB_CAM_SCAM_IOP )
+#if (defined E3SM_SCM_REPLAY )
     call outfld('omega   ',state%omega,    pcols,   lchnk     )
 #endif
 
@@ -1244,6 +1242,14 @@ end subroutine diag_conv_tend_ini
     if (hist_fld_active('V200')) then
        call vertinterp(ncol, pcols, pver, state%pmid, 20000._r8, state%v, p_surf)
        call outfld('V200    ', p_surf, pcols, lchnk )
+    end if
+    if (hist_fld_active('U90M')) then
+       call vertinterpz(ncol, pcols, pver, state%zm, 90._r8, state%u, p_surf)
+       call outfld('U90M    ', p_surf, pcols, lchnk )
+    end if
+    if (hist_fld_active('V90M')) then
+       call vertinterpz(ncol, pcols, pver, state%zm, 90._r8, state%v, p_surf)
+       call outfld('V90M    ', p_surf, pcols, lchnk )
     end if
 
     ftem(:ncol,:) = state%t(:ncol,:)*state%t(:ncol,:)
@@ -1486,7 +1492,7 @@ subroutine diag_conv(state, ztodt, pbuf)
    call outfld('PRECLav ', precl, pcols, lchnk )
    call outfld('PRECCav ', precc, pcols, lchnk )
 
-#if ( defined BFB_CAM_SCAM_IOP )
+#if ( defined E3SM_SCM_REPLAY )
    call outfld('Prec   ' , prect, pcols, lchnk )
 #endif
 
@@ -1579,10 +1585,12 @@ subroutine diag_surf (cam_in, cam_out, ps, trefmxav, trefmnav )
     call outfld('RHREFHT',   ftem,      pcols, lchnk)
 
 
-#if (defined BFB_CAM_SCAM_IOP )
+#if (defined E3SM_SCM_REPLAY )
     call outfld('shflx   ',cam_in%shf,   pcols,   lchnk)
     call outfld('lhflx   ',cam_in%lhf,   pcols,   lchnk)
     call outfld('trefht  ',cam_in%tref,  pcols,   lchnk)
+    call outfld('Tg', cam_in%ts, pcols, lchnk)
+    call outfld('Tsair',cam_in%ts, pcols, lchnk)
 #endif
 !
 ! Ouput ocn and ice fractions

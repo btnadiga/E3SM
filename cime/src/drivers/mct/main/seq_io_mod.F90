@@ -37,6 +37,7 @@ module seq_io_mod
   use mct_mod           ! mct wrappers
   use pio
   use component_type_mod
+  use seq_infodata_mod, only: seq_infodata_type
 
   implicit none
   private
@@ -104,7 +105,6 @@ module seq_io_mod
   type(iosystem_desc_t), pointer :: cpl_io_subsystem
 
   character(CL) :: charvar   ! buffer for string read/write
-  integer(IN) :: io_comm
 
   !=================================================================================
 contains
@@ -132,13 +132,14 @@ contains
   !
   ! !INTERFACE: ------------------------------------------------------------------
 
-  subroutine seq_io_wopen(filename,clobber,file_ind)
+  subroutine seq_io_wopen(filename,clobber,file_ind, model_doi_url)
 
     ! !INPUT/OUTPUT PARAMETERS:
     implicit none
     character(*),intent(in) :: filename
     logical,optional,intent(in):: clobber
     integer,optional,intent(in):: file_ind
+    character(CL), optional, intent(in)  :: model_doi_url
 
     !EOP
 
@@ -149,6 +150,7 @@ contains
     integer :: nmode
     integer :: lfile_ind
     character(CL)  :: lversion
+    character(CL)  :: lmodel_doi_url
     character(*),parameter :: subName = '(seq_io_wopen) '
 
     !-------------------------------------------------------------------------------
@@ -160,10 +162,13 @@ contains
     lclobber = .false.
     if (present(clobber)) lclobber=clobber
 
+    lmodel_doi_url = 'unset'
+    if (present(model_doi_url)) lmodel_doi_url = model_doi_url
+
     lfile_ind = 0
     if (present(file_ind)) lfile_ind=file_ind
 
-    call seq_comm_setptrs(CPLID,iam=iam,mpicom=mpicom)
+    call seq_comm_setptrs(CPLID, iam=iam, mpicom=mpicom) 
 
     if (.not. pio_file_is_open(cpl_io_file(lfile_ind))) then
        ! filename not open
@@ -182,6 +187,7 @@ contains
              rcode = pio_createfile(cpl_io_subsystem, cpl_io_file(lfile_ind), cpl_pio_iotype, trim(filename), nmode)
              if(iam==0) write(logunit,*) subname,' create file ',trim(filename)
              rcode = pio_put_att(cpl_io_file(lfile_ind),pio_global,"file_version",version)
+             rcode = pio_put_att(cpl_io_file(lfile_ind),pio_global,"model_doi_url",lmodel_doi_url)
           else
 
              rcode = pio_openfile(cpl_io_subsystem, cpl_io_file(lfile_ind), cpl_pio_iotype, trim(filename), pio_write)
@@ -194,6 +200,7 @@ contains
                 rcode = pio_put_att(cpl_io_file(lfile_ind),pio_global,"file_version",version)
                 rcode = pio_enddef(cpl_io_file(lfile_ind))
              endif
+
           endif
        else
           nmode = pio_noclobber
@@ -205,6 +212,7 @@ contains
           rcode = pio_createfile(cpl_io_subsystem, cpl_io_file(lfile_ind), cpl_pio_iotype, trim(filename), nmode)
           if(iam==0) write(logunit,*) subname,' create file ',trim(filename)
           rcode = pio_put_att(cpl_io_file(lfile_ind),pio_global,"file_version",version)
+          rcode = pio_put_att(cpl_io_file(lfile_ind),pio_global,"model_doi_url",lmodel_doi_url)
        endif
     elseif (trim(wfilename) /= trim(filename)) then
        ! filename is open, better match open filename
@@ -243,7 +251,6 @@ contains
 
     integer :: iam
     integer :: lfile_ind
-    integer :: rcode
     character(*),parameter :: subName = '(seq_io_close) '
 
     !-------------------------------------------------------------------------------
@@ -369,7 +376,7 @@ contains
   ! !INTERFACE: ------------------------------------------------------------------
 
   subroutine seq_io_write_av(filename,gsmap,AV,dname,whead,wdata,nx,ny,nt,fillval,pre,tavg,&
-       use_float, file_ind)
+       use_float, file_ind, scolumn)
 
     ! !INPUT/OUTPUT PARAMETERS:
     implicit none
@@ -387,14 +394,14 @@ contains
     logical,optional,intent(in) :: tavg     ! is this a tavg
     logical,optional,intent(in) :: use_float ! write output as float rather than double
     integer,optional,intent(in) :: file_ind
+    logical,optional,intent(in) :: scolumn ! single column model flag
 
     !EOP
 
     integer(in) :: rcode
-    integer(in) :: mpicom
     integer(in) :: iam
     integer(in) :: nf,ns,ng
-    integer(in) :: i,j,k,n
+    integer(in) :: k
     integer(in),target  :: dimid2(2)
     integer(in),target  :: dimid3(3)
     integer(in),pointer :: dimid(:)
@@ -408,15 +415,14 @@ contains
     character(CL)    :: lname       ! long name
     character(CL)    :: sname       ! standard name
     character(CL)    :: lpre        ! local prefix
-    logical :: exists
     logical :: lwhead, lwdata
     logical :: luse_float
     integer(in) :: lnx,lny
     real(r8) :: lfillvalue
     character(*),parameter :: subName = '(seq_io_write_av) '
-    integer :: lbnum
     integer, pointer :: Dof(:)
     integer :: lfile_ind
+    logical :: lcolumn
 
     real(r8), allocatable :: tmpdata(:)
 
@@ -436,8 +442,10 @@ contains
 
     lwhead = .true.
     lwdata = .true.
+    lcolumn = .false.
     if (present(whead)) lwhead = whead
     if (present(wdata)) lwdata = wdata
+    if (present(scolumn)) lcolumn = scolumn
 
     if (.not.lwhead .and. .not.lwdata) then
        ! should we write a warning?
@@ -471,7 +479,7 @@ contains
     if (present(ny)) then
        if (ny /= 0) lny = ny
     endif
-    if (lnx*lny /= ng) then
+    if (lnx*lny /= ng .and. .not. lcolumn) then 
        if(iam==0) write(logunit,*) subname,' ERROR: grid2d size not consistent ',ng,lnx,lny,trim(dname)
        call shr_sys_abort(subname//'ERROR: grid2d size not consistent ')
     endif
@@ -558,7 +566,7 @@ contains
   ! !INTERFACE: ------------------------------------------------------------------
 
   subroutine seq_io_write_avs(filename,gsmap,AVS,dname,whead,wdata,nx,ny,nt,fillval,pre,tavg,&
-       use_float,file_ind)
+       use_float,file_ind,scolumn)
 
     ! !INPUT/OUTPUT PARAMETERS:
     implicit none
@@ -576,14 +584,14 @@ contains
     logical,optional,intent(in) :: tavg     ! is this a tavg
     logical,optional,intent(in) :: use_float ! write output as float rather than double
     integer,optional,intent(in) :: file_ind
+    logical,optional,intent(in) :: scolumn ! single column model flag
 
     !EOP
 
     integer(in) :: rcode
-    integer(in) :: mpicom
     integer(in) :: iam
     integer(in) :: nf,ns,ng,ni
-    integer(in) :: i,j,k,n,k1,k2
+    integer(in) :: k,n,k1
     integer(in),target  :: dimid2(2)
     integer(in),target  :: dimid3(3)
     integer(in),target  :: dimid4(4)
@@ -598,17 +606,16 @@ contains
     character(CL)    :: lname       ! long name
     character(CL)    :: sname       ! standard name
     character(CL)    :: lpre        ! local prefix
-    logical :: exists
     logical :: lwhead, lwdata
     logical :: luse_float
     integer(in) :: lnx,lny
     real(r8) :: lfillvalue
     real(r8), allocatable :: data(:)
     character(*),parameter :: subName = '(seq_io_write_avs) '
-    integer :: lbnum
     integer, pointer :: Dof(:)
     integer, pointer :: Dofn(:)
     integer :: lfile_ind
+    logical :: lcolumn
 
     !-------------------------------------------------------------------------------
     !
@@ -626,8 +633,10 @@ contains
 
     lwhead = .true.
     lwdata = .true.
+    lcolumn = .false. 
     if (present(whead)) lwhead = whead
     if (present(wdata)) lwdata = wdata
+    if (present(scolumn)) lcolumn = scolumn
 
     if (.not.lwhead .and. .not.lwdata) then
        ! should we write a warning?
@@ -665,7 +674,7 @@ contains
     if (present(ny)) then
        if (ny /= 0) lny = ny
     endif
-    if (lnx*lny /= ng) then
+    if (lnx*lny /= ng .and. .not. lcolumn) then 
        if(iam==0) write(logunit,*) subname,' ERROR: grid2d size not consistent ',ng,lnx,lny,trim(dname)
        call shr_sys_abort(subname//' ERROR: grid2d size not consistent ')
     endif
@@ -783,7 +792,7 @@ contains
   ! !INTERFACE: ------------------------------------------------------------------
 
   subroutine seq_io_write_avscomp(filename, comp, flow, dname, &
-       whead, wdata, nx, ny, nt, fillval, pre, tavg, use_float, file_ind)
+       whead, wdata, nx, ny, nt, fillval, pre, tavg, use_float, file_ind, scolumn)
 
     ! !INPUT/OUTPUT PARAMETERS:
     implicit none
@@ -801,6 +810,7 @@ contains
     logical          ,optional,intent(in) :: tavg      ! is this a tavg
     logical          ,optional,intent(in) :: use_float ! write output as float rather than double
     integer          ,optional,intent(in) :: file_ind
+    logical          ,optional,intent(in) :: scolumn    ! single column model flag 
 
     !EOP
 
@@ -808,10 +818,9 @@ contains
     type(mct_avect), pointer :: avcomp1
     type(mct_avect), pointer :: avcomp
     integer(in)              :: rcode
-    integer(in)              :: mpicom
     integer(in)              :: iam
     integer(in)              :: nf,ns,ng,ni
-    integer(in)              :: i,j,k,n,k1,k2
+    integer(in)              :: k,n,k1,k2
     integer(in),target       :: dimid2(2)
     integer(in),target       :: dimid3(3)
     integer(in),target       :: dimid4(4)
@@ -826,17 +835,16 @@ contains
     character(CL)            :: lname       ! long name
     character(CL)            :: sname       ! standard name
     character(CL)            :: lpre        ! local prefix
-    logical                  :: exists
     logical                  :: lwhead, lwdata
     logical                  :: luse_float
     integer(in)              :: lnx,lny
     real(r8)                 :: lfillvalue
     real(r8), allocatable    :: data(:)
     character(*),parameter   :: subName = '(seq_io_write_avs) '
-    integer                  :: lbnum
     integer, pointer         :: Dof(:)
     integer, pointer         :: Dofn(:)
     integer                  :: lfile_ind
+    logical                  :: lcolumn
 
     !-------------------------------------------------------------------------------
     !
@@ -854,8 +862,10 @@ contains
 
     lwhead = .true.
     lwdata = .true.
+    lcolumn = .false. 
     if (present(whead)) lwhead = whead
     if (present(wdata)) lwdata = wdata
+    if (present(scolumn)) lcolumn = scolumn
     frame = -1
     if (present(nt)) then
        frame = nt
@@ -895,7 +905,7 @@ contains
     if (present(ny)) then
        if (ny /= 0) lny = ny
     endif
-    if (lnx*lny /= ng) then
+    if (lnx*lny /= ng .and. .not. lcolumn) then
        if(iam==0) then
           write(logunit,*) subname,' ERROR: grid2d size not consistent ',&
                ng,lnx,lny,trim(dname)
@@ -1039,7 +1049,6 @@ contains
     character(CL)    :: cunit       ! var units
     character(CL)    :: lname       ! long name
     character(CL)    :: sname       ! standard name
-    logical :: exists
     logical :: lwhead, lwdata
     integer :: lfile_ind
     character(*),parameter :: subName = '(seq_io_write_int) '
@@ -1117,7 +1126,6 @@ contains
     character(CL)    :: lname       ! long name
     character(CL)    :: sname       ! standard name
     integer(in) :: lnx
-    logical :: exists
     logical :: lwhead, lwdata
     integer :: lfile_ind
     character(*),parameter :: subName = '(seq_io_write_int1d) '
@@ -1193,7 +1201,6 @@ contains
     character(CL)    :: cunit       ! var units
     character(CL)    :: lname       ! long name
     character(CL)    :: sname       ! standard name
-    logical :: exists
     logical :: lwhead, lwdata
     integer :: lfile_ind
     character(*),parameter :: subName = '(seq_io_write_r8) '
@@ -1267,7 +1274,6 @@ contains
     !EOP
 
     integer(in) :: rcode
-    integer(in) :: mpicom
     integer(in) :: iam
     integer(in) :: dimid(1)
     type(var_desc_t) :: varid
@@ -1275,7 +1281,6 @@ contains
     character(CL)    :: lname       ! long name
     character(CL)    :: sname       ! standard name
     integer(in) :: lnx
-    logical :: exists
     logical :: lwhead, lwdata
     integer :: lfile_ind
     character(*),parameter :: subName = '(seq_io_write_r81d) '
@@ -1345,7 +1350,6 @@ contains
     !EOP
 
     integer(in) :: rcode
-    integer(in) :: mpicom
     integer(in) :: iam
     integer(in) :: dimid(1)
     type(var_desc_t) :: varid
@@ -1353,7 +1357,6 @@ contains
     character(CL)    :: lname       ! long name
     character(CL)    :: sname       ! standard name
     integer(in) :: lnx
-    logical :: exists
     logical :: lwhead, lwdata
     integer :: lfile_ind
     character(*),parameter :: subName = '(seq_io_write_char) '
@@ -1434,8 +1437,6 @@ contains
     integer(in) :: dimid(1)
     integer(in) :: dimid2(2)
     type(var_desc_t) :: varid
-    integer(in) :: lnx
-    logical :: exists
     logical :: lwhead, lwdata
     integer :: start(4),count(4)
     character(len=shr_cal_calMaxLen) :: lcalendar
@@ -1535,14 +1536,14 @@ contains
     integer(in) :: rcode
     integer(in) :: iam,mpicom
     integer(in) :: nf,ns,ng
-    integer(in) :: i,j,k,n, ndims
+    integer(in) :: k,n, ndims
+    logical :: exists
     type(file_desc_t) :: pioid
     integer(in) :: dimid(2)
     type(var_desc_t) :: varid
     integer(in) :: lnx,lny
     type(mct_string) :: mstring     ! mct char type
     character(CL)    :: itemc       ! string converted to char
-    logical :: exists
     type(io_desc_t) :: iodesc
     integer(in), pointer :: dof(:)
     character(CL)  :: lversion
@@ -1661,7 +1662,7 @@ contains
     integer(in) :: rcode
     integer(in) :: iam,mpicom
     integer(in) :: nf,ns,ng,ni
-    integer(in) :: i,j,k,n,n1,n2,ndims
+    integer(in) :: k,n,n1,n2,ndims
     type(file_desc_t) :: pioid
     integer(in) :: dimid(4)
     type(var_desc_t) :: varid
@@ -1830,7 +1831,7 @@ contains
     integer(in)              :: rcode
     integer(in)              :: iam,mpicom
     integer(in)              :: nf,ns,ng,ni
-    integer(in)              :: i,j,k,n,n1,n2,ndims
+    integer(in)              :: k,n,n1,n2,ndims
     type(file_desc_t)        :: pioid
     integer(in)              :: dimid(4)
     type(var_desc_t)         :: varid

@@ -4,7 +4,7 @@
 
 module test_mod
 
-use control_mod,    only: test_case, sub_case, rsplit
+use control_mod,    only: test_case, sub_case, dt_remap_factor, runtype
 use dimensions_mod, only: np, nlev, nlevp, qsize
 use derivative_mod, only: derivative_t, gradient_sphere
 use element_mod,    only: element_t
@@ -21,14 +21,20 @@ use asp_tests,            only: asp_tracer, asp_baroclinic, asp_rossby, asp_moun
 use baroclinic_inst_mod,  only: binst_init_state, jw_baroclinic
 use dcmip12_wrapper,      only: dcmip2012_test1_1, dcmip2012_test1_2, dcmip2012_test1_3,&
                                 dcmip2012_test2_0, dcmip2012_test2_x, dcmip2012_test3,  &
-                                dcmip2012_test4_init, mtest_init
-use dcmip16_wrapper,      only: dcmip2016_test1, dcmip2016_test2, dcmip2016_test3, dcmip2016_forcing,dcmip2016_test1_forcing, dcmip2016_test3_forcing
+
+                                dcmip2012_test4_init, mtest_init, dcmip2012_test1_1_conv
+use dcmip16_wrapper,      only: dcmip2016_test1, dcmip2016_test2, dcmip2016_test3, &
+                                dcmip2016_test1_forcing, dcmip2016_test2_forcing, dcmip2016_test3_forcing, &
+                                dcmip2016_test1_pg, dcmip2016_test1_pg_forcing, dcmip2016_init
 use dcmip16_wrapper,      only: dcmip2016_test1_wopertIC ! (ASXM)
+
 use held_suarez_mod,      only: hs0_init_state
 
 implicit none
 
 public :: set_prescribed_wind
+
+logical, private :: midpoint_eta_dot_dpdn = .false.
 
 
 contains
@@ -45,36 +51,79 @@ subroutine set_test_initial_conditions(elem, deriv, hybrid, hvcoord, tl, nets, n
   type(hvcoord_t),    intent(inout)         :: hvcoord                  ! hybrid vertical coordinates
   type(timelevel_t),  intent(in)            :: tl                       ! time level sctructure
   integer,            intent(in)            :: nets,nete                ! start, end element index
-
+ 
+  ! init calls for any runtype
   select case(test_case)
-
-    case('asp_baroclinic');     call asp_baroclinic   (elem,hybrid,hvcoord,nets,nete)
-    case('asp_gravity_wave');   call asp_gravity_wave (elem,hybrid,hvcoord,nets,nete,sub_case)
-    case('asp_mountain');       call asp_mountain     (elem,hybrid,hvcoord,nets,nete)
-    case('asp_rossby');         call asp_rossby       (elem,hybrid,hvcoord,nets,nete)
-    case('asp_tracer');         call asp_tracer       (elem,hybrid,hvcoord,nets,nete)
-    case('baroclinic');         call binst_init_state (elem,hybrid, nets, nete, hvcoord)
-    case('dcmip2012_test1_1');  call dcmip2012_test1_1(elem,hybrid,hvcoord,nets,nete,0.0d0,1,timelevels)
-    case('dcmip2012_test1_2');  call dcmip2012_test1_2(elem,hybrid,hvcoord,nets,nete,0.0d0,1,timelevels)
-    case('dcmip2012_test1_3');  call dcmip2012_test1_3(elem,hybrid,hvcoord,nets,nete,0.0d0,1,timelevels,deriv)
-    case('dcmip2012_test2_0');  call dcmip2012_test2_0(elem,hybrid,hvcoord,nets,nete)
-    case('dcmip2012_test2_1');  call dcmip2012_test2_x(elem,hybrid,hvcoord,nets,nete,0)
-    case('dcmip2012_test2_2');  call dcmip2012_test2_x(elem,hybrid,hvcoord,nets,nete,1)
-    case('dcmip2012_test3');    call dcmip2012_test3  (elem,hybrid,hvcoord,nets,nete)
-    case('dcmip2012_test4');    call dcmip2012_test4_init(elem,hybrid,hvcoord,nets,nete)
+    case('asp_baroclinic');
+    case('asp_gravity_wave');
+    case('asp_mountain');
+    case('asp_rossby');
+    case('asp_tracer');
+    case('baroclinic');
+    case('dcmip2012_test1_1');
+    case('dcmip2012_test1_1_conv');
+    case('dcmip2012_test1_2');
+    case('dcmip2012_test1_3');
+    case('dcmip2012_test2_0');
+    case('dcmip2012_test2_1');
+    case('dcmip2012_test2_2');
+    case('dcmip2012_test3');
+    case('dcmip2012_test4');
+    ! case('dcmip2016_test1');    call dcmip2016_init(); !commented out by BN
     ! case('dcmip2016_test1');  call dcmip2016_test1  (elem,hybrid,hvcoord,nets,nete)        ! commented out by SXM
     case('dcmip2016_test1');    call dcmip2016_test1_wopertIC(elem,hybrid,hvcoord,nets,nete) ! (ASXM)
-    case('dcmip2016_test2');    call dcmip2016_test2  (elem,hybrid,hvcoord,nets,nete)
-    case('dcmip2016_test3');    call dcmip2016_test3  (elem,hybrid,hvcoord,nets,nete)
-    case('mtest1');             call mtest_init       (elem,hybrid,hvcoord,nets,nete,1)
-    case('mtest2');             call mtest_init       (elem,hybrid,hvcoord,nets,nete,2)
-    case('mtest3');             call mtest_init       (elem,hybrid,hvcoord,nets,nete,3)
-    case('held_suarez0');       call hs0_init_state   (elem,hybrid,hvcoord,nets,nete,300.0_rl)
-    case('jw_baroclinic');      call jw_baroclinic    (elem,hybrid,hvcoord,nets,nete)
-    case default;               call abortmp('unrecognized test case')
+       
+    case('dcmip2016_test1_pg1', 'dcmip2016_test1_pg2', 'dcmip2016_test1_pg3', 'dcmip2016_test1_pg4')
+       call dcmip2016_init();
+    case('dcmip2016_test2');    call dcmip2016_init();
+    case('dcmip2016_test3');    call dcmip2016_init();
+    case('mtest1');
+    case('mtest2');
+    case('mtest3');
+    case('held_suarez0');
+    case('jw_baroclinic');
 
+    case default;               call abortmp('unrecognized test case')
   endselect
 
+  !initial conditions for initial run, runtype=0
+  ! also does other test case setup.  
+!  if (runtype == 0) then
+    select case(test_case)
+ 
+      case('asp_baroclinic');     call asp_baroclinic   (elem,hybrid,hvcoord,nets,nete)
+      case('asp_gravity_wave');   call asp_gravity_wave (elem,hybrid,hvcoord,nets,nete,sub_case)
+      case('asp_mountain');       call asp_mountain     (elem,hybrid,hvcoord,nets,nete)
+      case('asp_rossby');         call asp_rossby       (elem,hybrid,hvcoord,nets,nete)
+      case('asp_tracer');         call asp_tracer       (elem,hybrid,hvcoord,nets,nete)
+      case('baroclinic');         call binst_init_state (elem,hybrid, nets, nete, hvcoord)
+      case('dcmip2012_test1_1');  call dcmip2012_test1_1(elem,hybrid,hvcoord,nets,nete,0.0d0,1,timelevels)
+      case('dcmip2012_test1_1_conv')
+         midpoint_eta_dot_dpdn = .true.
+         call dcmip2012_test1_1_conv(elem,hybrid,hvcoord,nets,nete,0.0d0,1,timelevels)
+      case('dcmip2012_test1_2');  call dcmip2012_test1_2(elem,hybrid,hvcoord,nets,nete,0.0d0,1,timelevels)
+      case('dcmip2012_test1_3');  call dcmip2012_test1_3(elem,hybrid,hvcoord,nets,nete,0.0d0,1,timelevels,deriv)
+      case('dcmip2012_test2_0');  call dcmip2012_test2_0(elem,hybrid,hvcoord,nets,nete)
+      case('dcmip2012_test2_1');  call dcmip2012_test2_x(elem,hybrid,hvcoord,nets,nete,0)
+      case('dcmip2012_test2_2');  call dcmip2012_test2_x(elem,hybrid,hvcoord,nets,nete,1)
+      case('dcmip2012_test3');    call dcmip2012_test3  (elem,hybrid,hvcoord,nets,nete)
+      case('dcmip2012_test4');    call dcmip2012_test4_init(elem,hybrid,hvcoord,nets,nete)
+      case('dcmip2016_test1');    call dcmip2016_test1  (elem,hybrid,hvcoord,nets,nete)
+      case('dcmip2016_test1_pg1'); call dcmip2016_test1_pg(elem,hybrid,hvcoord,nets,nete,1)
+      case('dcmip2016_test1_pg2'); call dcmip2016_test1_pg(elem,hybrid,hvcoord,nets,nete,2)
+      case('dcmip2016_test1_pg3'); call dcmip2016_test1_pg(elem,hybrid,hvcoord,nets,nete,3)
+      case('dcmip2016_test1_pg4'); call dcmip2016_test1_pg(elem,hybrid,hvcoord,nets,nete,4)
+      case('dcmip2016_test2');    call dcmip2016_test2  (elem,hybrid,hvcoord,nets,nete)
+      case('dcmip2016_test3');    call dcmip2016_test3  (elem,hybrid,hvcoord,nets,nete)
+      case('mtest1');             call mtest_init       (elem,hybrid,hvcoord,nets,nete,1)
+      case('mtest2');             call mtest_init       (elem,hybrid,hvcoord,nets,nete,2)
+      case('mtest3');             call mtest_init       (elem,hybrid,hvcoord,nets,nete,3)
+      case('held_suarez0');       call hs0_init_state   (elem,hybrid,hvcoord,nets,nete,300.0_rl)
+      case('jw_baroclinic');      call jw_baroclinic    (elem,hybrid,hvcoord,nets,nete)
+      case default;               call abortmp('unrecognized test case')
+
+    endselect
+!  endif
 end subroutine
 
 !_______________________________________________________________________
@@ -92,7 +141,9 @@ subroutine set_test_prescribed_wind(elem, deriv, hybrid, hvcoord, dt, tl, nets, 
   integer :: n0,np1, ie
   real(rl):: time
 
-  time = tl%nstep*dt
+  ! Use nstep+1 to get wind at end of time step, consistent with what
+  ! time integration produces in a non-test simulation.
+  time = (tl%nstep+1)*dt
   n0   = tl%n0
   np1  = tl%np1
 
@@ -104,6 +155,7 @@ subroutine set_test_prescribed_wind(elem, deriv, hybrid, hvcoord, dt, tl, nets, 
   ! set prescribed quantities at timelevel np1 
   select case(test_case)
     case('dcmip2012_test1_1'); call dcmip2012_test1_1(elem,hybrid,hvcoord,nets,nete,time,np1,np1)
+    case('dcmip2012_test1_1_conv'); call dcmip2012_test1_1_conv(elem,hybrid,hvcoord,nets,nete,time,np1,np1)
     case('dcmip2012_test1_2'); call dcmip2012_test1_2(elem,hybrid,hvcoord,nets,nete,time,np1,np1)
     case('dcmip2012_test1_3'); call dcmip2012_test1_3(elem,hybrid,hvcoord,nets,nete,time,np1,np1,deriv)
   endselect
@@ -117,6 +169,7 @@ subroutine compute_test_forcing(elem,hybrid,hvcoord,nt,ntQ,dt,nets,nete,tl)
 
   use dcmip12_wrapper, only:  dcmip2012_test2_x_forcing
   use held_suarez_mod, only: hs_forcing
+  use control_mod,     only: ftype
   implicit none
   type(element_t),  intent(inout) :: elem(:)                            ! element array
   type(hybrid_t),   intent(in)    :: hybrid                             ! hybrid parallel structure
@@ -125,16 +178,24 @@ subroutine compute_test_forcing(elem,hybrid,hvcoord,nt,ntQ,dt,nets,nete,tl)
   integer,          intent(in)    :: nets,nete,nt,ntQ
   type(TimeLevel_t),intent(in)    :: tl
 
-  integer :: ie,q
+  integer :: ie,q,k
+  real (kind=real_kind) :: dp(np,np)
 
   ! zero out forcing terms
   do ie=nets,nete
     elem(ie)%derived%FT = 0
     elem(ie)%derived%FM = 0
     elem(ie)%derived%FQ = 0
+#ifdef MODEL_THETA_L
+    elem(ie)%derived%FVTheta = 0
+    elem(ie)%derived%FPHI = 0
+#endif
   enddo
 
   ! get forcing terms from test case
+
+!NOTE need to understand logic begind old/new dp and ps_v in cam to see if this
+!code is correct, too.
   select case(test_case)
 
     case('dcmip2012_test2_1');  call dcmip2012_test2_x_forcing(elem,hybrid,hvcoord,nets,nete,nt,dt)
@@ -144,7 +205,9 @@ subroutine compute_test_forcing(elem,hybrid,hvcoord,nt,ntQ,dt,nets,nete,tl)
     case('mtest3');             call dcmip2012_test2_x_forcing(elem,hybrid,hvcoord,nets,nete,nt,dt)
 
     case('dcmip2016_test1');    call dcmip2016_test1_forcing(elem,hybrid,hvcoord,nets,nete,nt,ntQ,dt,tl)
-    case('dcmip2016_test2');    call dcmip2016_forcing(elem,hybrid,hvcoord,nets,nete,nt,ntQ,dt,tl,2)
+    case('dcmip2016_test1_pg1', 'dcmip2016_test1_pg2', 'dcmip2016_test1_pg3', 'dcmip2016_test1_pg4')
+       call dcmip2016_test1_pg_forcing(elem,hybrid,hvcoord,nets,nete,nt,ntQ,dt,tl)
+    case('dcmip2016_test2');    call dcmip2016_test2_forcing(elem,hybrid,hvcoord,nets,nete,nt,ntQ,dt,tl,2)
     case('dcmip2016_test3');    call dcmip2016_test3_forcing(elem,hybrid,hvcoord,nets,nete,nt,ntQ,dt,tl)
 
     case('held_suarez0');
@@ -154,6 +217,20 @@ subroutine compute_test_forcing(elem,hybrid,hvcoord,nt,ntQ,dt,nets,nete,tl)
 
   endselect
 
+!for ftype3 we scale tendencies by dp
+  if(ftype == 3) then
+    !initialize dp3d from ps
+    do ie=nets,nete
+      do k=1,nlev
+        dp(:,:)= ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
+                 ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,nt)
+        elem(ie)%derived%FT(:,:,k) = elem(ie)%derived%FT(:,:,k) * dp(:,:)
+        elem(ie)%derived%FM(:,:,1,k) = elem(ie)%derived%FM(:,:,1,k) * dp(:,:)
+        elem(ie)%derived%FM(:,:,2,k) = elem(ie)%derived%FM(:,:,2,k) * dp(:,:)
+      enddo
+    enddo
+  endif
+    
 end subroutine
 
 
@@ -170,26 +247,55 @@ end subroutine
     integer              , intent(in)             :: nete
     real (kind=real_kind), intent(in)             :: eta_ave_w
 
+    real (kind=real_kind), parameter :: half = 0.5d0
+
     real (kind=real_kind) :: dp(np,np)! pressure thickness, vflux
-    real(kind=real_kind)  :: time
     real(kind=real_kind)  :: eta_dot_dpdn(np,np,nlevp)
 
     integer :: ie,k,n0,np1
 
-    time  = tl%nstep*dt
     n0    = tl%n0
     np1   = tl%np1
 
+    if (midpoint_eta_dot_dpdn) then
+       ! To get second order in the vertical direction, we need to
+       ! approximate eta_dot_dpdn at the time midpoint.
+       if (dt_remap_factor == 0) then
+          ! Accumulate first part of the midpoint.
+          do ie = nets,nete
+             elem(ie)%derived%eta_dot_dpdn = elem(ie)%derived%eta_dot_dpdn + &
+                  half*elem(ie)%derived%eta_dot_dpdn_prescribed*eta_ave_w
+          end do
+       else
+          ! Save previous prescribed value.
+          do ie = nets,nete
+             elem(ie)%derived%eta_dot_dpdn = elem(ie)%derived%eta_dot_dpdn_prescribed
+          end do
+       end if
+    end if
     call set_test_prescribed_wind(elem,deriv,hybrid,hv,dt,tl,nets,nete)
     ! accumulate velocities and fluxes over timesteps
     ! test code only dont bother to openmp thread
     do ie = nets,nete
        eta_dot_dpdn(:,:,:)=elem(ie)%derived%eta_dot_dpdn_prescribed(:,:,:)
        ! accumulate mean fluxes for advection
-       if (rsplit==0) then
-          elem(ie)%derived%eta_dot_dpdn(:,:,:) = &
-               elem(ie)%derived%eta_dot_dpdn(:,:,:) + eta_dot_dpdn(:,:,:)*eta_ave_w
+       if (midpoint_eta_dot_dpdn) then
+          if (dt_remap_factor == 0) then
+             ! Accumulate second part of the midpoint.
+             elem(ie)%derived%eta_dot_dpdn = elem(ie)%derived%eta_dot_dpdn + &
+                  half*elem(ie)%derived%eta_dot_dpdn_prescribed*eta_ave_w
+          else
+             ! Calculate value at time midpoint.
+             eta_dot_dpdn = half*(elem(ie)%derived%eta_dot_dpdn + &
+                  elem(ie)%derived%eta_dot_dpdn_prescribed)
+          end if
        else
+          if (dt_remap_factor == 0) then
+             elem(ie)%derived%eta_dot_dpdn(:,:,:) = &
+                  elem(ie)%derived%eta_dot_dpdn(:,:,:) + eta_dot_dpdn(:,:,:)*eta_ave_w
+          end if
+       end if
+       if (dt_remap_factor /= 0) then
           ! lagrangian case.  mean vertical velocity = 0
           elem(ie)%derived%eta_dot_dpdn(:,:,:) = 0
           ! update position of floating levels
@@ -208,5 +314,19 @@ end subroutine
 
     enddo
   end subroutine
+
+  subroutine print_test_results(elem, tl, hvcoord, par)
+    use parallel_mod, only: parallel_t
+    use dcmip12_wrapper, only: dcmip2012_print_test1_conv_results
+
+    type(element_t), intent(in) :: elem(:)
+    type(timelevel_t), intent(in) :: tl
+    type(hvcoord_t), intent(in) :: hvcoord
+    type(parallel_t), intent(in) :: par
+
+    select case(test_case)
+       case('dcmip2012_test1_1_conv'); call dcmip2012_print_test1_conv_results(elem, tl, hvcoord, par, 1)
+    end select
+  end subroutine print_test_results
 
 end module

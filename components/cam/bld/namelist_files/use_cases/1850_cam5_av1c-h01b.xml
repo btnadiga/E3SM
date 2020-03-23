@@ -40,7 +40,7 @@
 <history_aero_optics>.true.</history_aero_optics>
 
 <!-- File for BC dep in snow feature -->
-<fsnowoptics>lnd/clm2/snicardata/snicar_optics_5bnd_mam_c140303.nc</fsnowoptics>
+<fsnowoptics>lnd/clm2/snicardata/snicar_optics_5bnd_mam_c160322.nc</fsnowoptics>
 
 <!-- Radiation bugfix -->
 <use_rad_dt_cosz>.true.</use_rad_dt_cosz>
@@ -70,11 +70,11 @@
 <zmconv_mx_bot_lyr_adj   >2</zmconv_mx_bot_lyr_adj>
 <taubgnd                 >2.5D-3 </taubgnd>
 <clubb_C1                >1.335</clubb_C1>
+<clubb_C1b                >1.335</clubb_C1b>
 <raytau0                 >5.0D0</raytau0>
 <prc_coef1               >30500.0D0</prc_coef1>
 <prc_exp                 >3.19D0</prc_exp>
 <prc_exp1                >-1.2D0</prc_exp1>
-<se_ftype                >2</se_ftype>
 <relvar_fix              >.true.</relvar_fix>
 <mg_prc_coeff_fix        >.true.</mg_prc_coeff_fix>
 <rrtmg_temp_fix          >.true.</rrtmg_temp_fix>

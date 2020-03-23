@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 class EntryID(GenericXML):
 
-    def __init__(self, infile=None, schema=None):
-        GenericXML.__init__(self, infile, schema)
+    def __init__(self, infile=None, schema=None, read_only=True):
+        GenericXML.__init__(self, infile, schema, read_only=read_only)
         self.groups={}
 
     def get_default_value(self, node, attributes=None):
@@ -184,8 +184,8 @@ class EntryID(GenericXML):
 
     def _get_valid_values(self, node):
         valid_values = self.get_element_text("valid_values", root=node)
-        valid_values_list = None
-        if valid_values is not None:
+        valid_values_list = []
+        if valid_values:
             valid_values_list = [item.lstrip() for item in valid_values.split(',')]
         return valid_values_list
 
@@ -234,7 +234,7 @@ class EntryID(GenericXML):
         type_str = self._get_type_info(node)
         str_value = convert_to_string(value, type_str, vid)
 
-        if valid_values is not None and not str_value.startswith('$'):
+        if valid_values and not str_value.startswith('$'):
             expect(str_value in valid_values, "Did not find {} in valid values for {}: {}".format(value, vid, valid_values))
         return str_value
 
@@ -391,29 +391,32 @@ class EntryID(GenericXML):
         """
         expect(False, " Not expected to be here {}".format(self.get(node, "id")))
 
-    def compare_xml(self, other):
+    def compare_xml(self, other, root=None, otherroot=None):
         xmldiffs = {}
-        f1nodes = self.scan_children("entry")
+        if root is not None:
+            expect(otherroot is not None," inconsistant request")
+        f1nodes = self.scan_children("entry", root=root)
         for node in f1nodes:
             vid = self.get(node, "id")
-            f2match = other.scan_optional_child("entry", attributes={"id":vid})
-            if f2match is not None:
+            logger.debug("Compare vid {}".format(vid))
+            f2match = other.scan_optional_child("entry", attributes={"id":vid},root=otherroot)
+            expect(f2match is not None,"Could not find {} in Locked file".format(vid))
+            if node != f2match:
                 f1val = self.get_value(vid, resolved=False)
                 if f1val is not None:
                     f2val = other.get_value(vid, resolved=False)
                     if f1val != f2val:
                         xmldiffs[vid] = [f1val, f2val]
-                else:
-                    for comp in self.get_values("COMP_CLASSES"):
+                elif hasattr(self, "_components"):
+                    # pylint: disable=no-member
+                    for comp in self._components:
                         f1val = self.get_value("{}_{}".format(vid,comp), resolved=False)
                         if f1val is not None:
                             f2val = other.get_value("{}_{}".format(vid,comp), resolved=False)
                             if f1val != f2val:
                                 xmldiffs[vid] = [f1val, f2val]
                         else:
-                            f1val = self.to_string(node, method="text")
-                            f2val = self.to_string(f2match, method="text")
-                            if f2val != f1val:
+                            if node != f2match:
                                 f1value_nodes = self.get_children("value", root=node)
                                 for valnode in f1value_nodes:
                                     f2valnodes = other.get_children("value", root=f2match, attributes=self.attrib(valnode))
@@ -432,7 +435,11 @@ class EntryID(GenericXML):
             if len(samenodes) > 1:
                 expect(len(samenodes) == 2, "Too many matchs for id {} in file {}".format(vid, self.filename))
                 logger.debug("Overwriting node {}".format(vid))
+                read_only = self.read_only
+                if read_only:
+                    self.read_only = False
                 self.remove_child(samenodes[0])
+                self.read_only = read_only
 
     def __iter__(self):
         for node in self.scan_children("entry"):

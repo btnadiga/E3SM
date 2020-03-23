@@ -18,7 +18,6 @@ module model_init_mod
 
 contains
 
-
   subroutine model_init2( elem , hybrid, deriv ,hvcoord,tl,nets,nete)
     use element_state, only: state_qdp, derived_vn0, derived_divdp, derived_divdp_proj
     use dimensions_mod, only: nelemd

@@ -38,6 +38,10 @@ module VegetationPropertiesType
      real(r8), allocatable :: rootprof_beta (:)   ! rooting distribution parameter for C and N inputs [unitless]
      real(r8), allocatable :: dwood         (:)   ! wood density (gC/m3)
      real(r8), allocatable :: slatop        (:)   ! specific leaf area at top of canopy, projected area basis [m^2/gC]
+! for plant hydraulics
+     real(r8), allocatable :: root_radius   (:)   ! root radius (m)
+     real(r8), allocatable :: root_density  (:)   ! root density (gC/m3)
+!
      real(r8), allocatable :: dsladlai      (:)   ! dSLA/dLAI, projected area basis [m^2/gC]
      real(r8), allocatable :: leafcn        (:)   ! leaf C:N (gC/gN)
      real(r8), allocatable :: flnr          (:)   ! fraction of leaf N in the Rubisco enzyme (gN Rubisco / gN leaf)
@@ -114,6 +118,10 @@ module VegetationPropertiesType
      real(r8), allocatable :: i_vc(:)                  ! intercept of photosynthesis vcmax ~ leaf n content regression model
      real(r8), allocatable :: s_vc(:)                  ! slope of photosynthesis vcmax ~ leaf n content regression model
 
+     real(r8), allocatable :: alpha_nfix(:)            ! fraction of fixed N goes directly to plant
+     real(r8), allocatable :: alpha_ptase(:)           ! fraction of phosphatase produced P goes directly to plant
+     real(r8), allocatable :: ccost_nfix(:)            ! plant C cost per unit N produced by N2 fixation
+     real(r8), allocatable :: ccost_ptase(:)           ! plant C cost per unit P produced by phosphatase
      real(r8), allocatable :: fnr(:)              !fraction of nitrogen in RuBisCO
      real(r8), allocatable :: act25(:)
      real(r8), allocatable :: kcha(:)             !Activation energy for kc
@@ -165,6 +173,7 @@ contains
     use pftvarcon , only : km_decomp_nh4, km_decomp_no3, km_decomp_p, km_nit, km_den
     use pftvarcon , only : decompmicc_patch_vr
     use pftvarcon , only : vmax_nfix, km_nfix
+    use pftvarcon , only : alpha_nfix, alpha_ptase,ccost_nfix,ccost_ptase
     use pftvarcon , only : vmax_ptase, km_ptase, lamda_ptase
     use pftvarcon , only : i_vc, s_vc
     use pftvarcon , only : leafcn_obs, frootcn_obs, livewdcn_obs, deadwdcn_obs
@@ -224,6 +233,8 @@ contains
     allocate(this%stress_decid  (0:numpft))        ; this%stress_decid (:)   =nan
     allocate(this%season_decid  (0:numpft))        ; this%season_decid (:)   =nan
     allocate(this%dwood         (0:numpft))        ; this%dwood        (:)   =nan
+    allocate(this%root_radius   (0:numpft))        ; this%root_radius  (:)   =nan
+    allocate(this%root_density  (0:numpft))        ; this%root_density (:)   =nan
     allocate(this%rootprof_beta (0:numpft))        ; this%rootprof_beta(:)   =nan
     allocate(this%fertnitro     (0:numpft))        ; this%fertnitro    (:)   =nan
     allocate(this%fleafcn       (0:numpft))        ; this%fleafcn      (:)   =nan
@@ -241,6 +252,10 @@ contains
     allocate(this%deadwdcp      (0:numpft))        ; this%deadwdcp     (:)   =nan
     allocate(this%graincp       (0:numpft))        ; this%graincp      (:)   =nan
     
+    allocate( this%alpha_nfix    (0:numpft))                     ; this%alpha_nfix    (:)        =nan
+    allocate( this%alpha_ptase   (0:numpft))                     ; this%alpha_ptase   (:)        =nan
+    allocate( this%ccost_nfix    (0:numpft))                     ; this%ccost_nfix    (:)        =nan
+    allocate( this%ccost_ptase   (0:numpft))                     ; this%ccost_ptase   (:)        =nan
     allocate( this%vmax_plant_nh4(0:numpft))                     ; this%vmax_plant_nh4(:)        =nan
     allocate( this%vmax_plant_no3(0:numpft))                     ; this%vmax_plant_no3(:)        =nan
     allocate( this%vmax_plant_p(0:numpft))                       ; this%vmax_plant_p(:)          =nan
@@ -326,6 +341,8 @@ contains
        this%stress_decid(m) = stress_decid(m)
        this%season_decid(m) = season_decid(m)
        this%dwood(m)        = dwood
+       this%root_radius(m)  = 0.29e-03_r8 !(m)
+       this%root_density(m) = 0.31e06_r8 !(g biomass / m3 root)
        this%fertnitro(m)    = fertnitro(m)
        this%fleafcn(m)      = fleafcn(m)
        this%ffrootcn(m)     = ffrootcn(m)
@@ -364,6 +381,10 @@ contains
     end do
     
     do m = 0,numpft
+        this%alpha_nfix(m)     = alpha_nfix(m)
+        this%alpha_ptase(m)    = alpha_ptase(m)
+        this%ccost_nfix(m)     = ccost_nfix(m)
+        this%ccost_ptase(m)    = ccost_ptase(m)
         this%vmax_plant_nh4(m) = vmax_plant_nh4(m)
         this%vmax_plant_no3(m) = vmax_plant_no3(m)
         this%vmax_plant_p(m)   = vmax_plant_p(m)
