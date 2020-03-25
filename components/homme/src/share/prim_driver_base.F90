@@ -1789,7 +1789,7 @@ contains
          elem(ie)%derived%dpdiss_ave=0
          elem(ie)%derived%dpdiss_biharmonic=0
       endif
-      if (use_semi_lagrange_transport) then
+      if (transport_alg > 0) then      
         elem(ie)%derived%vstar=elem(ie)%state%v(:,:,:,:,tl%n0)
       end if
       elem(ie)%derived%dp(:,:,:)=elem(ie)%state%dp3d(:,:,:,tl%n0)
