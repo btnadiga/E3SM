@@ -165,6 +165,7 @@ subroutine phys_ctl_readnl(nlfile)
    use mpishorthand
    use cam_control_mod, only: cam_ctrl_set_physics_type
    use cam_control_mod, only: constant_zenith_deg, constant_albedo
+   use cam_control_mod, only: constant_srfgust, constant_srfgust_form, do_thermal_seed, thermal_seed_form, thermal_seed_limit ! (ASXM)
 
    character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
@@ -189,7 +190,8 @@ subroutine phys_ctl_readnl(nlfile)
       mam_amicphys_optaa, n_so4_monolayers_pcage,micro_mg_accre_enhan_fac, &
       l_tracer_aero, l_vdiff, l_rayleigh, l_gw_drag, l_ac_energy_chk, &
       l_bc_energy_fix, l_dry_adj, l_st_mac, l_st_mic, l_rad, prc_coef1,prc_exp,prc_exp1,cld_sed,mg_prc_coeff_fix, &
-      rrtmg_temp_fix, constant_zenith_deg, constant_albedo
+      rrtmg_temp_fix, constant_zenith_deg, constant_albedo, & ! (MSXM)
+      constant_srfgust, constant_srfgust_form, do_thermal_seed, thermal_seed_form, thermal_seed_limit ! (ASXM)
    !-----------------------------------------------------------------------------
 
    if (masterproc) then
@@ -277,6 +279,11 @@ subroutine phys_ctl_readnl(nlfile)
    call mpibcast(cld_sed,                         1 , mpir8,   0, mpicom)
    call mpibcast(constant_zenith_deg,             1 , mpir8,   0, mpicom)
    call mpibcast(constant_albedo,                 1 , mpir8,   0, mpicom)
+   call mpibcast(constant_srfgust,                               1,   mpir8, 0, mpicom) ! (ASXM)
+   call mpibcast(constant_srfgust_form, len(constant_srfgust_form), mpichar, 0, mpicom) ! (ASXM)
+   call mpibcast(do_thermal_seed,                                1,  mpilog, 0, mpicom) ! (ASXM)
+   call mpibcast(thermal_seed_form,         len(thermal_seed_form), mpichar, 0, mpicom) ! (ASXM)
+   call mpibcast(thermal_seed_limit,                             1,   mpir8, 0, mpicom) ! (ASXM)
 #endif
 
    call cam_ctrl_set_physics_type(cam_physpkg)

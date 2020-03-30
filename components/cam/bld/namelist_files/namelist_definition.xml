@@ -4041,6 +4041,37 @@ the value is less than 0
 Default: -1
 </entry>
 
+<!-- ASXM (BEG) -->
+<entry id="constant_srfgust" type="real"  category="pbl"
+       group="phys_ctl_nl" valid_values="" >
+Constant surface layer gustiness for idealized configurations
+such as radiative-convective equilibrium experiments. This is disabled when 
+the value is less than 0
+Default: -1
+</entry>
+
+<entry id="constant_srfgust_form" type="char*16"  category="pbl"
+       group="phys_ctl_nl" valid_values="quadGust,minGust,none" >
+Form of constant surface layer gustiness for idealized configurations
+such as radiative-convective equilibrium experiments
+Default: 'none'
+</entry>
+
+<entry id="thermal_seed_form" type="char*16"  category="pbl"
+       group="phys_ctl_nl" valid_values="randSeed,dtmnSeed,none" >
+Form of thermal seed at the lowest five levels during intialization 
+for idealized configurations such as radiative-convective equilibrium experiments
+Default: 'none'
+</entry>
+
+<entry id="thermal_seed_limit" type="real"  category="pbl"
+       group="phys_ctl_nl" valid_values="" >
+upper limit of thermal seed at the lowest five levels during intialization
+for idealized configurations such as radiative-convective equilibrium experiments
+Default: 0.0
+</entry>
+<!-- ASXM (END) -->
+
 <entry id="conv_water_in_rad" type="integer" category="radiation"
        group="phys_ctl_nl" valid_values="0,1,2" >
 Convective water used in radiation?
@@ -4101,6 +4132,14 @@ radiative-convective equilibrium experiments. This is disabled when
 the value is less than 0
 Default: -1
 </entry>
+
+<!-- ASXM (BEG) -->
+<entry id="do_thermal_seed" type="logical"  category="pbl"
+       group="phys_ctl_nl" valid_values="" >
+Indicates whether to introduce thermal seed at the lowest 5 levels during initialization
+Default: FALSE
+</entry>
+<!-- ASXM (END) -->
 
 <entry id="spectralflux" type="logical"  category="radiation"
        group="radiation_nl" valid_values="" >

@@ -120,7 +120,8 @@ class EnvMachSpecific(EnvBase):
             source_cmd = ""
 
         if (module_system in ["module"]):
-            return run_cmd_no_fail("{}module list".format(source_cmd), combine_output=True)
+            # return run_cmd_no_fail("{}module list".format(source_cmd), combine_output=True) # commented out per the instructions from Mathew Maltrud at LANL (CSXM)
+            return "" # added per the instructions from Mathew Maltrud at LANL (CSXM)
         elif (module_system == "soft"):
             # Does soft really not provide this capability?
             return ""
@@ -406,7 +407,7 @@ class EnvMachSpecific(EnvBase):
         cmd_nodes = self.get_optional_child("cmd_path", attributes={"lang":lang}, root=self.get_child("module_system"))
         return self.text(cmd_nodes) if cmd_nodes is not None else None
 
-    def get_mpirun(self, case, attribs, job, exe_only=False, overrides=None):
+    def get_mpirun(self, case, attribs, job, exe_only=False):
         """
         Find best match, return (executable, {arg_name : text})
         """
@@ -462,12 +463,12 @@ class EnvMachSpecific(EnvBase):
         # Now that we know the best match, compute the arguments
         if not exe_only:
             arg_node = self.get_optional_child("arguments", root=the_match)
-            if arg_node:
+            if arg_node is not None:
                 arg_nodes = self.get_children("arg", root=arg_node)
                 for arg_node in arg_nodes:
                     arg_value = transform_vars(self.text(arg_node),
                                                case=case,
-                                               subgroup=job,overrides=overrides,
+                                               subgroup=job,
                                                default=self.get(arg_node, "default"))
                     args.append(arg_value)
 

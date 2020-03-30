@@ -813,6 +813,9 @@ add_default($nl,'do_aerosol_rad');
 
 add_default($nl,'fixed_total_solar_irradiance');
 
+# introduce thermal seed during initialization (defaults is .false.) (ASXM)
+add_default($nl,'do_thermal_seed');
+
 #
 # Simulated years: sim_year and sim_year_start
 #
@@ -4003,6 +4006,18 @@ add_default($nl, 'constant_zenith_deg');
 
 # constant albedo (default is -1 = disabled)
 add_default($nl, 'constant_albedo');
+
+# constant surface layer gustiness (default is -1 = disabled) (ASXM)
+add_default($nl, 'constant_srfgust');
+
+# constant surface layer gustiness form (default is 'none') (ASXM)
+add_default($nl, 'constant_srfgust_form');
+
+# thermal seed form at the lowest five levels during initialization (default is 'none') (ASXM)
+add_default($nl, 'thermal_seed_form');
+
+# upper limit of thermal seed at the lowest five levels during intialization (default is 0.0) (ASXM)
+add_default($nl, 'thermal_seed_limit');
 
 # Spectral Element dycore
 # ============

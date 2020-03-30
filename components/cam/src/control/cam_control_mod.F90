@@ -32,6 +32,11 @@ module cam_control_mod
       
       real(r8) :: constant_zenith_deg  ! constant solar zenith angle (degrees)
       real(r8) :: constant_albedo      ! constant albedo
+      real(r8)          :: constant_srfgust      ! constant gustiness in surface layer (ASXM)
+      character(len=16) :: constant_srfgust_form ! form of constant gustiness in surface layer (ASXM)
+      logical           :: do_thermal_seed       ! introduce thermal seed during initialization or not (ASXM)
+      character(len=16) :: thermal_seed_form     ! form of thermal seed at the lowest five levels duing initialization (ASXM)
+      real(r8)          :: thermal_seed_limit    ! upper limit of thermal seed at the lowest five levels during initialization (ASXM)      
 !
 !------------------------------------------------------------
 
