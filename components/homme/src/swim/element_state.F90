@@ -25,14 +25,17 @@ module element_state
 
     ! to go through compilation for all cases when doing BW-PM (ASXM, BEG)
     real (kind=real_kind) :: w_i (np,np,nlevp,timelevels)             ! vertical velocity at interfaces
-    real (kind=real_kind) :: theta_dp_cp(np,np,nlev,timelevels)       ! potential temperature                       
+    ! real (kind=real_kind) :: theta_dp_cp(np,np,nlev,timelevels)     ! potential temperature         ! commented out by SXM (MSXM, GitHub Mar2020)
+    real (kind=real_kind) :: vtheta_dp(np,np,nlev,timelevels)         ! virtual potential temperature ! added by SXM (ASXM, GitHub Mar2020)
     real (kind=real_kind) :: phinh_i(np,np,nlevp,timelevels)          ! geopotential used by NH model at interfaces
     real (kind=real_kind) :: Fv(np,np,2,nlev)                         ! F-forcing to p
     real (kind=real_kind) :: v0(np,np,2,nlev)                         ! v-basic state 
     real (kind=real_kind) :: Fw_i(np,np,nlevp)                        ! F-forcing to w_i
     real (kind=real_kind) :: w_i0(np,np,nlevp)                        ! w_i-basic state 
-    real (kind=real_kind) :: Ftheta_dp_cp(np,np,nlev)                 ! F-forcing to theta_dp_cp
-    real (kind=real_kind) :: theta_dp_cp0(np,np,nlev)                 ! theta_dp_cp-basic state
+    ! real (kind=real_kind) :: Ftheta_dp_cp(np,np,nlev)               ! F-forcing to theta_dp_cp ! commented out by SXM (MSXM, GitHub Mar2020)
+    real (kind=real_kind) :: Fvtheta_dp(np,np,nlev)                   ! F-forcing to vtheta_dp   ! added by SXM (ASXM, GitHub Mar2020)
+    ! real (kind=real_kind) :: theta_dp_cp0(np,np,nlev)               ! theta_dp_cp-basic state  ! commented out by SXM (MSXM, GitHub Mar2020)
+    real (kind=real_kind) :: vtheta_dp0(np,np,nlev)                   ! vtheta_dp-basic state    ! added by SXM (ASXM, GitHub Mar2020)
     real (kind=real_kind) :: Fphinh_i(np,np,nlevp)                    ! F-forcing to phinh_i
     real (kind=real_kind) :: phinh_i0(np,np,nlevp)                    ! phinh_i-basic state
     real (kind=real_kind) :: Fdp3d(np,np,nlev)                        ! F-forcing to dp3d

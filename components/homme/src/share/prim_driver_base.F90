@@ -1216,24 +1216,25 @@ contains
     do ie = nets, nete
       ! Step01: Process levels 1 to nlev
       do k = 1, nlev
-        elem(ie)%state%v(:,:,1,k,4)         = elem(ie)%state%v(:,:,1,k,tl%nm1)
-        elem(ie)%state%v(:,:,2,k,4)         = elem(ie)%state%v(:,:,2,k,tl%nm1)
-        elem(ie)%state%w_i(:,:,k,4)         = elem(ie)%state%w_i(:,:,k,tl%nm1)
-        elem(ie)%state%theta_dp_cp(:,:,k,4) = elem(ie)%state%theta_dp_cp(:,:,k,tl%nm1)
-        elem(ie)%state%phinh_i(:,:,k,4)     = elem(ie)%state%phinh_i(:,:,k,tl%nm1)
+        elem(ie)%state%v(:,:,1,k,4)           = elem(ie)%state%v(:,:,1,k,tl%nm1)
+        elem(ie)%state%v(:,:,2,k,4)           = elem(ie)%state%v(:,:,2,k,tl%nm1)
+        elem(ie)%state%w_i(:,:,k,4)           = elem(ie)%state%w_i(:,:,k,tl%nm1)
+        ! elem(ie)%state%theta_dp_cp(:,:,k,4) = elem(ie)%state%theta_dp_cp(:,:,k,tl%nm1) ! commented out by SXM (MSXM, GitHub Mar2020)
+        elem(ie)%state%vtheta_dp(:,:,k,4)     = elem(ie)%state%vtheta_dp(:,:,k,tl%nm1)   ! added by SXM (ASXM, GitHub Mar2020)
+        elem(ie)%state%phinh_i(:,:,k,4)       = elem(ie)%state%phinh_i(:,:,k,tl%nm1)
         if(PM_dp3d) then
-          elem(ie)%state%dp3d(:,:,k,4)      = elem(ie)%state%dp3d(:,:,k,tl%nm1)
+          elem(ie)%state%dp3d(:,:,k,4)        = elem(ie)%state%dp3d(:,:,k,tl%nm1)
         end if
         if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
           if(PM_ps_v) then
-            elem(ie)%state%ps_v(:,:,4)      = elem(ie)%state%ps_v(:,:,tl%nm1)
+            elem(ie)%state%ps_v(:,:,4)        = elem(ie)%state%ps_v(:,:,tl%nm1)
           end if
         end if
         if(PM_Qdp) then
-          elem(ie)%state%Qdp(:,:,k,:,3)     = elem(ie)%state%Qdp(:,:,k,:,n0_qdp)
+          elem(ie)%state%Qdp(:,:,k,:,3)       = elem(ie)%state%Qdp(:,:,k,:,n0_qdp)
         end if
         if(PM_Q) then
-          elem(ie)%state%prvQ(:,:,k,:)      = elem(ie)%state%Q(:,:,k,:)
+          elem(ie)%state%prvQ(:,:,k,:)        = elem(ie)%state%Q(:,:,k,:)
         end if
       end do ! k-loop
 
@@ -1401,33 +1402,35 @@ contains
         !   a) xbar    = elem(ie)%state%v(:,:,1,k,4)
         !   b) G(xbar) = elem(ie)%state%v(:,:,1,k,np1), corresponding to G(xk) = x(k+1) with xk == xbar, such that taking value at np1, np1_qdp or implicitly the "next nstep" for Q.
         if(nstep .EQ. 0) then ! for both PM and steady model solutions
-          elem(ie)%state%Fv(:,:,1,k)            = elem(ie)%state%v(:,:,1,k,4)         - elem(ie)%state%v(:,:,1,k,np1)         ! constant forcing xbar-G(xbar)
-          elem(ie)%state%v0(:,:,1,k)            = elem(ie)%state%v(:,:,1,k,4)                                                 ! basic state xbar
-          elem(ie)%state%Fv(:,:,2,k)            = elem(ie)%state%v(:,:,2,k,4)         - elem(ie)%state%v(:,:,2,k,np1)         ! constant forcing xbar-G(xbar)
-          elem(ie)%state%v0(:,:,2,k)            = elem(ie)%state%v(:,:,2,k,4)                                                 ! basic state xbar
-          elem(ie)%state%Fw_i(:,:,k)            = elem(ie)%state%w_i(:,:,k,4)         - elem(ie)%state%w_i(:,:,k,np1)         ! constant forcing xbar-G(xbar)
-          elem(ie)%state%w_i0(:,:,k)            = elem(ie)%state%w_i(:,:,k,4)                                                 ! basic state xbar
-          elem(ie)%state%Ftheta_dp_cp(:,:,k)    = elem(ie)%state%theta_dp_cp(:,:,k,4) - elem(ie)%state%theta_dp_cp(:,:,k,np1) ! constant forcing xbar-G(xbar)
-          elem(ie)%state%theta_dp_cp0(:,:,k)    = elem(ie)%state%theta_dp_cp(:,:,k,4)                                         ! basic state xbar
-          elem(ie)%state%Fphinh_i(:,:,k)        = elem(ie)%state%phinh_i(:,:,k,4)     - elem(ie)%state%phinh_i(:,:,k,np1)     ! constant forcing xbar-G(xbar)
-          elem(ie)%state%phinh_i0(:,:,k)        = elem(ie)%state%phinh_i(:,:,k,4)                                             ! basic state xbar
+          elem(ie)%state%Fv(:,:,1,k)           = elem(ie)%state%v(:,:,1,k,4)         - elem(ie)%state%v(:,:,1,k,np1)         ! constant forcing xbar-G(xbar)
+          elem(ie)%state%v0(:,:,1,k)           = elem(ie)%state%v(:,:,1,k,4)                                                 ! basic state xbar
+          elem(ie)%state%Fv(:,:,2,k)           = elem(ie)%state%v(:,:,2,k,4)         - elem(ie)%state%v(:,:,2,k,np1)         ! constant forcing xbar-G(xbar)
+          elem(ie)%state%v0(:,:,2,k)           = elem(ie)%state%v(:,:,2,k,4)                                                 ! basic state xbar
+          elem(ie)%state%Fw_i(:,:,k)           = elem(ie)%state%w_i(:,:,k,4)         - elem(ie)%state%w_i(:,:,k,np1)         ! constant forcing xbar-G(xbar)
+          elem(ie)%state%w_i0(:,:,k)           = elem(ie)%state%w_i(:,:,k,4)                                                 ! basic state xbar
+          ! elem(ie)%state%Ftheta_dp_cp(:,:,k) = elem(ie)%state%theta_dp_cp(:,:,k,4) - elem(ie)%state%theta_dp_cp(:,:,k,np1) ! constant forcing xbar-G(xbar) ! commented out by SXM (MSXM, GitHub Mar2020)
+          elem(ie)%state%Fvtheta_dp(:,:,k)     = elem(ie)%state%vtheta_dp(:,:,k,4)   - elem(ie)%state%vtheta_dp(:,:,k,np1)   ! constant forcing xbar-G(xbar) ! added by SXM (ASXM, GitHub Mar2020)
+          ! elem(ie)%state%theta_dp_cp0(:,:,k) = elem(ie)%state%theta_dp_cp(:,:,k,4)                                         ! basic state xbar              ! commented out by SXM (MSXM, GitHub Mar2020)
+          elem(ie)%state%vtheta_dp0(:,:,k)     = elem(ie)%state%vtheta_dp(:,:,k,4)                                           ! basic state xbar              ! added by SXM (ASXM, GitHub Mar2020)
+          elem(ie)%state%Fphinh_i(:,:,k)       = elem(ie)%state%phinh_i(:,:,k,4)     - elem(ie)%state%phinh_i(:,:,k,np1)     ! constant forcing xbar-G(xbar)
+          elem(ie)%state%phinh_i0(:,:,k)       = elem(ie)%state%phinh_i(:,:,k,4)                                             ! basic state xbar
           if(PM_dp3d) then
-            elem(ie)%state%Fdp3d(:,:,k)         = elem(ie)%state%dp3d(:,:,k,4)        - elem(ie)%state%dp3d(:,:,k,np1)        ! constant forcing xbar-G(xbar)
-            elem(ie)%state%dp3d0(:,:,k)         = elem(ie)%state%dp3d(:,:,k,4)                                                ! basic state xbar
+            elem(ie)%state%Fdp3d(:,:,k)        = elem(ie)%state%dp3d(:,:,k,4)        - elem(ie)%state%dp3d(:,:,k,np1)        ! constant forcing xbar-G(xbar)
+            elem(ie)%state%dp3d0(:,:,k)        = elem(ie)%state%dp3d(:,:,k,4)                                                ! basic state xbar
           end if
           if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
             if(PM_ps_v) then
-              elem(ie)%state%Fps_v(:,:)         = elem(ie)%state%ps_v(:,:,4)          - elem(ie)%state%ps_v(:,:,np1)          ! constant forcing xbar-G(xbar)
-              elem(ie)%state%ps_v0(:,:)         = elem(ie)%state%ps_v(:,:,4)                                                  ! basic state, xbar
+              elem(ie)%state%Fps_v(:,:)        = elem(ie)%state%ps_v(:,:,4)          - elem(ie)%state%ps_v(:,:,np1)          ! constant forcing xbar-G(xbar)
+              elem(ie)%state%ps_v0(:,:)        = elem(ie)%state%ps_v(:,:,4)                                                  ! basic state, xbar
             end if
           end if
           if(PM_Qdp) then
-            elem(ie)%state%FQdp(:,:,k,:)        = elem(ie)%state%Qdp(:,:,k,:,3)       - elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   ! constant forcing xbar-G(xbar)
-            elem(ie)%state%Qdp0(:,:,k,:)        = elem(ie)%state%Qdp(:,:,k,:,3)                                               ! basic state xbar
+            elem(ie)%state%FQdp(:,:,k,:)       = elem(ie)%state%Qdp(:,:,k,:,3)       - elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   ! constant forcing xbar-G(xbar)
+            elem(ie)%state%Qdp0(:,:,k,:)       = elem(ie)%state%Qdp(:,:,k,:,3)                                               ! basic state xbar
           end if
           if(PM_Q) then
-            elem(ie)%state%FQPM(:,:,k,:)        = elem(ie)%state%prvQ(:,:,k,:)        - elem(ie)%state%Q(:,:,k,:)             ! constant forcing xbar-G(xbar)
-            elem(ie)%state%Q0PM(:,:,k,:)        = elem(ie)%state%prvQ(:,:,k,:)                                                ! basic state xbar
+            elem(ie)%state%FQPM(:,:,k,:)       = elem(ie)%state%prvQ(:,:,k,:)        - elem(ie)%state%Q(:,:,k,:)             ! constant forcing xbar-G(xbar)
+            elem(ie)%state%Q0PM(:,:,k,:)       = elem(ie)%state%prvQ(:,:,k,:)                                                ! basic state xbar
           end if
         end if
 
@@ -1438,25 +1441,26 @@ contains
         ! 2) take u, i.e., elem(ie)%state%v(:,:,1,k,timelevels), as an example
         !   a) G(xk) = elem(ie)%state%v(:,:,1,k,np1), corresponding to G(xk) = x(k+1) such that taking value at np1
         !   b) F = results from nstep=0, i.e., elem(ie)%state%Fv(:,:,1,k)
-        if((PM_step .GT. 0) .and. (nstep .GE. 1) .and. (MOD((nstep+1), PM_step) .EQ. 0) .AND. (nstep .LT. PM_stop)) then      ! PM not applied at nstep=0 (see handnotes on why mod((nstep+1), PM_step)=0, instead of mod(nstep, PM_step)=0)
-          elem(ie)%state%v(:,:,1,k,np1)         = elem(ie)%state%v(:,:,1,k,np1)         + elem(ie)%state%Fv(:,:,1,k)          ! actually x*; Eq. B4: x* = G(xk) + F
-          elem(ie)%state%v(:,:,2,k,np1)         = elem(ie)%state%v(:,:,2,k,np1)         + elem(ie)%state%Fv(:,:,2,k)          ! actually x*; Eq. B4: x* = G(xk) + F
-          elem(ie)%state%w_i(:,:,k,np1)         = elem(ie)%state%w_i(:,:,k,np1)         + elem(ie)%state%Fw_i(:,:,k)          ! actually x*; Eq. B4: x* = G(xk) + F
-          elem(ie)%state%theta_dp_cp(:,:,k,np1) = elem(ie)%state%theta_dp_cp(:,:,k,np1) + elem(ie)%state%Ftheta_dp_cp(:,:,k)  ! actually x*; Eq. B4: x* = G(xk) + F
-          elem(ie)%state%phinh_i(:,:,k,np1)     = elem(ie)%state%phinh_i(:,:,k,np1)     + elem(ie)%state%Fphinh_i(:,:,k)      ! actually x*; Eq. B4: x* = G(xk) + F
+        if((PM_step .GT. 0) .and. (nstep .GE. 1) .and. (MOD((nstep+1), PM_step) .EQ. 0) .AND. (nstep .LT. PM_stop)) then        ! PM not applied at nstep=0 (see handnotes on why mod((nstep+1), PM_step)=0, instead of mod(nstep, PM_step)=0)
+          elem(ie)%state%v(:,:,1,k,np1)           = elem(ie)%state%v(:,:,1,k,np1)         + elem(ie)%state%Fv(:,:,1,k)          ! actually x*; Eq. B4: x* = G(xk) + F
+          elem(ie)%state%v(:,:,2,k,np1)           = elem(ie)%state%v(:,:,2,k,np1)         + elem(ie)%state%Fv(:,:,2,k)          ! actually x*; Eq. B4: x* = G(xk) + F
+          elem(ie)%state%w_i(:,:,k,np1)           = elem(ie)%state%w_i(:,:,k,np1)         + elem(ie)%state%Fw_i(:,:,k)          ! actually x*; Eq. B4: x* = G(xk) + F
+          ! elem(ie)%state%theta_dp_cp(:,:,k,np1) = elem(ie)%state%theta_dp_cp(:,:,k,np1) + elem(ie)%state%Ftheta_dp_cp(:,:,k)  ! actually x*; Eq. B4: x* = G(xk) + F ! commented out by SXM (MSXM, GitHub Mar2020)
+          elem(ie)%state%vtheta_dp(:,:,k,np1)     = elem(ie)%state%vtheta_dp(:,:,k,np1)   + elem(ie)%state%Fvtheta_dp(:,:,k)    ! actually x*; Eq. B4: x* = G(xk) + F ! added by SXM (ASXM, GitHub Mar2020)
+          elem(ie)%state%phinh_i(:,:,k,np1)       = elem(ie)%state%phinh_i(:,:,k,np1)     + elem(ie)%state%Fphinh_i(:,:,k)      ! actually x*; Eq. B4: x* = G(xk) + F
           if(PM_dp3d) then
-            elem(ie)%state%dp3d(:,:,k,np1)      = elem(ie)%state%dp3d(:,:,k,np1)        + elem(ie)%state%Fdp3d(:,:,k)         ! actually x*; Eq. B4: x* = G(xk) + F
+            elem(ie)%state%dp3d(:,:,k,np1)        = elem(ie)%state%dp3d(:,:,k,np1)        + elem(ie)%state%Fdp3d(:,:,k)         ! actually x*; Eq. B4: x* = G(xk) + F
           end if
           if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
             if(PM_ps_v) then
-              elem(ie)%state%ps_v(:,:,np1)      = elem(ie)%state%ps_v(:,:,np1)          + elem(ie)%state%Fps_v(:,:)           ! actually x*; Eq. B4: x* = G(xk) + F
+              elem(ie)%state%ps_v(:,:,np1)        = elem(ie)%state%ps_v(:,:,np1)          + elem(ie)%state%Fps_v(:,:)           ! actually x*; Eq. B4: x* = G(xk) + F
             end if
           end if
           if(PM_Qdp) then
-            elem(ie)%state%Qdp(:,:,k,:,np1_qdp) = elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   + elem(ie)%state%FQdp(:,:,k,:)        ! actually x*; Eq. B4: x* = G(xk) + F
+            elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   = elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   + elem(ie)%state%FQdp(:,:,k,:)        ! actually x*; Eq. B4: x* = G(xk) + F
           end if
           if(PM_Q) then
-            elem(ie)%state%Q(:,:,k,:)           = elem(ie)%state%Q(:,:,k,:)             + elem(ie)%state%FQPM(:,:,k,:)        ! actually x*; Eq. B4: x* = G(xk) + F
+            elem(ie)%state%Q(:,:,k,:)             = elem(ie)%state%Q(:,:,k,:)             + elem(ie)%state%FQPM(:,:,k,:)        ! actually x*; Eq. B4: x* = G(xk) + F
           end if
         end if
       end do
@@ -1520,33 +1524,35 @@ contains
         !   d) r     = x*-xbar = elem(ie)%state%v(:,:,1,k,np1) - elem(ie)%state%v0(:,:,1,k)
         ! Step01: Process levels 1 to nlev
         do k = 1, nlev
-          elem(ie)%state%v(:,:,1,k,np1)         = alpha * (elem(ie)%state%v(:,:,1,k,np1)         - elem(ie)%state%v0(:,:,1,k))         & ! Eqs. B5-B6
-                                                + elem(ie)%state%v0(:,:,1,k)
-          elem(ie)%state%v(:,:,2,k,np1)         = alpha * (elem(ie)%state%v(:,:,2,k,np1)         - elem(ie)%state%v0(:,:,2,k))         & ! Eqs. B5-B6
-                                                + elem(ie)%state%v0(:,:,2,k)
-          elem(ie)%state%w_i(:,:,k,np1)         = alpha * (elem(ie)%state%w_i(:,:,k,np1)         - elem(ie)%state%w_i0(:,:,k))         & ! Eqs. B5-B6
-                                                + elem(ie)%state%w_i0(:,:,k)
-          elem(ie)%state%theta_dp_cp(:,:,k,np1) = alpha * (elem(ie)%state%theta_dp_cp(:,:,k,np1) - elem(ie)%state%theta_dp_cp0(:,:,k)) & ! Eqs. B5-B6
-                                                + elem(ie)%state%theta_dp_cp0(:,:,k)
-          elem(ie)%state%phinh_i(:,:,k,np1)     = alpha * (elem(ie)%state%phinh_i(:,:,k,np1)     - elem(ie)%state%phinh_i0(:,:,k))     & ! Eqs. B5-B6
-                                                + elem(ie)%state%phinh_i0(:,:,k)
+          elem(ie)%state%v(:,:,1,k,np1)           = alpha * (elem(ie)%state%v(:,:,1,k,np1)         - elem(ie)%state%v0(:,:,1,k))         & ! Eqs. B5-B6
+                                                  + elem(ie)%state%v0(:,:,1,k)
+          elem(ie)%state%v(:,:,2,k,np1)           = alpha * (elem(ie)%state%v(:,:,2,k,np1)         - elem(ie)%state%v0(:,:,2,k))         & ! Eqs. B5-B6
+                                                  + elem(ie)%state%v0(:,:,2,k)
+          elem(ie)%state%w_i(:,:,k,np1)           = alpha * (elem(ie)%state%w_i(:,:,k,np1)         - elem(ie)%state%w_i0(:,:,k))         & ! Eqs. B5-B6
+                                                  + elem(ie)%state%w_i0(:,:,k)
+          ! elem(ie)%state%theta_dp_cp(:,:,k,np1) = alpha * (elem(ie)%state%theta_dp_cp(:,:,k,np1) - elem(ie)%state%theta_dp_cp0(:,:,k)) & ! Eqs. B5-B6 ! commented out by SXM (MSXM, GitHub Mar2020)
+          !                                       + elem(ie)%state%theta_dp_cp0(:,:,k)                   
+          elem(ie)%state%vtheta_dp(:,:,k,np1)     = alpha * (elem(ie)%state%vtheta_dp(:,:,k,np1)   - elem(ie)%state%vtheta_dp0(:,:,k))   & ! Eqs. B5-B6 ! added by SXM (ASXM, GitHub Mar2020)
+                                                  + elem(ie)%state%vtheta_dp0(:,:,k)
+          elem(ie)%state%phinh_i(:,:,k,np1)       = alpha * (elem(ie)%state%phinh_i(:,:,k,np1)     - elem(ie)%state%phinh_i0(:,:,k))     & ! Eqs. B5-B6
+                                                  + elem(ie)%state%phinh_i0(:,:,k)
           if(PM_dp3d) then
-            elem(ie)%state%dp3d(:,:,k,np1)      = alpha * (elem(ie)%state%dp3d(:,:,k,np1)        - elem(ie)%state%dp3d0(:,:,k))        & ! Eqs. B5-B6
-                                                + elem(ie)%state%dp3d0(:,:,k)
+            elem(ie)%state%dp3d(:,:,k,np1)        = alpha * (elem(ie)%state%dp3d(:,:,k,np1)        - elem(ie)%state%dp3d0(:,:,k))        & ! Eqs. B5-B6
+                                                  + elem(ie)%state%dp3d0(:,:,k)
           end if
           if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
             if(PM_ps_v) then
-              elem(ie)%state%ps_v(:,:,np1)      = alpha * (elem(ie)%state%ps_v(:,:,np1)          - elem(ie)%state%ps_v0(:,:))          & ! Eqs. B5-B6
-                                                + elem(ie)%state%ps_v0(:,:)
+              elem(ie)%state%ps_v(:,:,np1)        = alpha * (elem(ie)%state%ps_v(:,:,np1)          - elem(ie)%state%ps_v0(:,:))          & ! Eqs. B5-B6
+                                                  + elem(ie)%state%ps_v0(:,:)
             end if
           end if
           if(PM_Qdp) then
-            elem(ie)%state%Qdp(:,:,k,:,np1_qdp) = alpha * (elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   - elem(ie)%state%Qdp0(:,:,k,:))       & ! Eqs. B5-B6
-                                                + elem(ie)%state%Qdp0(:,:,k,:)
+            elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   = alpha * (elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   - elem(ie)%state%Qdp0(:,:,k,:))       & ! Eqs. B5-B6
+                                                  + elem(ie)%state%Qdp0(:,:,k,:)
           end if
           if(PM_Q) then
-            elem(ie)%state%Q(:,:,k,:)           = alpha * (elem(ie)%state%Q(:,:,k,:)             - elem(ie)%state%Q0PM(:,:,k,:))       & ! Eqs. B5-B6
-                                                + elem(ie)%state%Q0PM(:,:,k,:)
+            elem(ie)%state%Q(:,:,k,:)             = alpha * (elem(ie)%state%Q(:,:,k,:)             - elem(ie)%state%Q0PM(:,:,k,:))       & ! Eqs. B5-B6
+                                                  + elem(ie)%state%Q0PM(:,:,k,:)
           end if
         end do ! k-loop
 
@@ -1589,39 +1595,46 @@ contains
             print *, 'PRS: ', nstep, 'Fv(:,:,1,15)        =', elem(ie)%state%Fv(:,:,1,15)  
             print *, 'PRS: ', nstep, 'bf+F v(:,:,1,15,np1)=', elem(nets)%state%v(:,:,1,15,np1)  
           end if
-          elem(ie)%state%v(:,:,1,k,np1)         = elem(ie)%state%v(:,:,1,k,np1)         + elem(ie)%state%Fv(:,:,1,k)         
-          elem(ie)%state%v(:,:,1,k,n0)          = elem(ie)%state%v(:,:,1,k,4)
-          elem(ie)%state%v(:,:,1,k,nm1)         = elem(ie)%state%v(:,:,1,k,np1)
-          elem(ie)%state%v(:,:,2,k,np1)         = elem(ie)%state%v(:,:,2,k,np1)         + elem(ie)%state%Fv(:,:,2,k)         
-          elem(ie)%state%v(:,:,2,k,n0)          = elem(ie)%state%v(:,:,2,k,4)
-          elem(ie)%state%v(:,:,2,k,nm1)         = elem(ie)%state%v(:,:,2,k,np1)
-          elem(ie)%state%w_i(:,:,k,np1)         = elem(ie)%state%w_i(:,:,k,np1)         + elem(ie)%state%Fw_i(:,:,k)         
-          elem(ie)%state%w_i(:,:,k,n0)          = elem(ie)%state%w_i(:,:,k,4)
-          elem(ie)%state%w_i(:,:,k,nm1)         = elem(ie)%state%w_i(:,:,k,np1)
-          elem(ie)%state%theta_dp_cp(:,:,k,np1) = elem(ie)%state%theta_dp_cp(:,:,k,np1) + elem(ie)%state%Ftheta_dp_cp(:,:,k) 
-          elem(ie)%state%theta_dp_cp(:,:,k,n0)  = elem(ie)%state%theta_dp_cp(:,:,k,4)
-          elem(ie)%state%theta_dp_cp(:,:,k,nm1) = elem(ie)%state%theta_dp_cp(:,:,k,np1)
-          elem(ie)%state%phinh_i(:,:,k,np1)     = elem(ie)%state%phinh_i(:,:,k,np1)     + elem(ie)%state%Fphinh_i(:,:,k)    
-          elem(ie)%state%phinh_i(:,:,k,n0)      = elem(ie)%state%phinh_i(:,:,k,4)
-          elem(ie)%state%phinh_i(:,:,k,nm1)     = elem(ie)%state%phinh_i(:,:,k,np1)
+          elem(ie)%state%v(:,:,1,k,np1)           = elem(ie)%state%v(:,:,1,k,np1)         + elem(ie)%state%Fv(:,:,1,k)         
+          elem(ie)%state%v(:,:,1,k,n0)            = elem(ie)%state%v(:,:,1,k,4)
+          elem(ie)%state%v(:,:,1,k,nm1)           = elem(ie)%state%v(:,:,1,k,np1)
+          elem(ie)%state%v(:,:,2,k,np1)           = elem(ie)%state%v(:,:,2,k,np1)         + elem(ie)%state%Fv(:,:,2,k)         
+          elem(ie)%state%v(:,:,2,k,n0)            = elem(ie)%state%v(:,:,2,k,4)
+          elem(ie)%state%v(:,:,2,k,nm1)           = elem(ie)%state%v(:,:,2,k,np1)
+          elem(ie)%state%w_i(:,:,k,np1)           = elem(ie)%state%w_i(:,:,k,np1)         + elem(ie)%state%Fw_i(:,:,k)         
+          elem(ie)%state%w_i(:,:,k,n0)            = elem(ie)%state%w_i(:,:,k,4)
+          elem(ie)%state%w_i(:,:,k,nm1)           = elem(ie)%state%w_i(:,:,k,np1)
+          ! commented out by SXM (MSXM, GitHub Mar2020, BEG)
+          ! elem(ie)%state%theta_dp_cp(:,:,k,np1) = elem(ie)%state%theta_dp_cp(:,:,k,np1) + elem(ie)%state%Ftheta_dp_cp(:,:,k) 
+          ! elem(ie)%state%theta_dp_cp(:,:,k,n0)  = elem(ie)%state%theta_dp_cp(:,:,k,4)
+          ! elem(ie)%state%theta_dp_cp(:,:,k,nm1) = elem(ie)%state%theta_dp_cp(:,:,k,np1)
+          ! commented out by SXM (MSXM, GitHub Mar2020, END)
+          ! added by SXM (ASXM, GitHub Mar2020, BEG)
+          elem(ie)%state%vtheta_dp(:,:,k,np1)     = elem(ie)%state%vtheta_dp(:,:,k,np1) + elem(ie)%state%Fvtheta_dp(:,:,k) 
+          elem(ie)%state%vtheta_dp(:,:,k,n0)      = elem(ie)%state%vtheta_dp(:,:,k,4)
+          elem(ie)%state%vtheta_dp(:,:,k,nm1)     = elem(ie)%state%vtheta_dp(:,:,k,np1)
+          ! added by SXM (ASXM, GitHub Mar2020, END)
+          elem(ie)%state%phinh_i(:,:,k,np1)       = elem(ie)%state%phinh_i(:,:,k,np1)     + elem(ie)%state%Fphinh_i(:,:,k)    
+          elem(ie)%state%phinh_i(:,:,k,n0)        = elem(ie)%state%phinh_i(:,:,k,4)
+          elem(ie)%state%phinh_i(:,:,k,nm1)       = elem(ie)%state%phinh_i(:,:,k,np1)
           if(PM_dp3d) then
-            elem(ie)%state%dp3d(:,:,k,np1)      = elem(ie)%state%dp3d(:,:,k,np1)        + elem(ie)%state%Fdp3d(:,:,k)              
-            elem(ie)%state%dp3d(:,:,k,n0)       = elem(ie)%state%dp3d(:,:,k,4)
-            elem(ie)%state%dp3d(:,:,k,nm1)      = elem(ie)%state%dp3d(:,:,k,np1)
+            elem(ie)%state%dp3d(:,:,k,np1)        = elem(ie)%state%dp3d(:,:,k,np1)        + elem(ie)%state%Fdp3d(:,:,k)              
+            elem(ie)%state%dp3d(:,:,k,n0)         = elem(ie)%state%dp3d(:,:,k,4)
+            elem(ie)%state%dp3d(:,:,k,nm1)        = elem(ie)%state%dp3d(:,:,k,np1)
           end if
           if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
             if(PM_ps_v) then
-              elem(ie)%state%ps_v(:,:,np1)      = elem(ie)%state%ps_v(:,:,np1)          + elem(ie)%state%Fps_v(:,:) 
-              elem(ie)%state%ps_v(:,:,n0)       = elem(ie)%state%ps_v(:,:,4)
-              elem(ie)%state%ps_v(:,:,nm1)      = elem(ie)%state%ps_v(:,:,np1)
+              elem(ie)%state%ps_v(:,:,np1)        = elem(ie)%state%ps_v(:,:,np1)          + elem(ie)%state%Fps_v(:,:) 
+              elem(ie)%state%ps_v(:,:,n0)         = elem(ie)%state%ps_v(:,:,4)
+              elem(ie)%state%ps_v(:,:,nm1)        = elem(ie)%state%ps_v(:,:,np1)
             end if
           end if
           if(PM_Qdp) then
-            elem(ie)%state%Qdp(:,:,k,:,np1_qdp) = elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   + elem(ie)%state%FQdp(:,:,k,:)              
-            elem(ie)%state%Qdp(:,:,k,:,n0_qdp)  = elem(ie)%state%Qdp(:,:,k,:,3)
+            elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   = elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   + elem(ie)%state%FQdp(:,:,k,:)              
+            elem(ie)%state%Qdp(:,:,k,:,n0_qdp)    = elem(ie)%state%Qdp(:,:,k,:,3)
           end if
           if(PM_Q) then
-            elem(ie)%state%Q(:,:,k,:)           = elem(ie)%state%Q(:,:,k,:)             + elem(ie)%state%FQPM(:,:,k,:)              
+            elem(ie)%state%Q(:,:,k,:)             = elem(ie)%state%Q(:,:,k,:)             + elem(ie)%state%FQPM(:,:,k,:)              
           end if
   
           ! DSXM
@@ -1645,24 +1658,25 @@ contains
       if(PM_steady_drct) then 
         ! Step01: Process levels 1 to nlev
         do k = 1, nlev
-          elem(ie)%state%v(:,:,1,k,np1)         = elem(ie)%state%v(:,:,1,k,4)
-          elem(ie)%state%v(:,:,2,k,np1)         = elem(ie)%state%v(:,:,2,k,4)
-          elem(ie)%state%w_i(:,:,k,np1)         = elem(ie)%state%w_i(:,:,k,4)
-          elem(ie)%state%theta_dp_cp(:,:,k,np1) = elem(ie)%state%theta_dp_cp(:,:,k,4)
-          elem(ie)%state%phinh_i(:,:,k,np1)     = elem(ie)%state%phinh_i(:,:,k,4)
+          elem(ie)%state%v(:,:,1,k,np1)           = elem(ie)%state%v(:,:,1,k,4)
+          elem(ie)%state%v(:,:,2,k,np1)           = elem(ie)%state%v(:,:,2,k,4)
+          elem(ie)%state%w_i(:,:,k,np1)           = elem(ie)%state%w_i(:,:,k,4)
+          ! elem(ie)%state%theta_dp_cp(:,:,k,np1) = elem(ie)%state%theta_dp_cp(:,:,k,4)! commented out by SXM (MSXM, GitHub Mar2020)
+          elem(ie)%state%vtheta_dp(:,:,k,np1)     = elem(ie)%state%vtheta_dp(:,:,k,4)  ! added by SXM (ASXM, GitHub Mar2020)
+          elem(ie)%state%phinh_i(:,:,k,np1)       = elem(ie)%state%phinh_i(:,:,k,4)
           if(PM_dp3d) then
-            elem(ie)%state%dp3d(:,:,k,np1)      = elem(ie)%state%dp3d(:,:,k,4)
+            elem(ie)%state%dp3d(:,:,k,np1)        = elem(ie)%state%dp3d(:,:,k,4)
           end if
           if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
             if(PM_ps_v) then
-              elem(ie)%state%ps_v(:,:,np1)      = elem(ie)%state%ps_v(:,:,4)
+              elem(ie)%state%ps_v(:,:,np1)        = elem(ie)%state%ps_v(:,:,4)
             end if
           end if
           if(PM_Qdp) then
-            elem(ie)%state%Qdp(:,:,k,:,np1_qdp) = elem(ie)%state%Qdp(:,:,k,:,3)
+            elem(ie)%state%Qdp(:,:,k,:,np1_qdp)   = elem(ie)%state%Qdp(:,:,k,:,3)
           end if
           if(PM_Q) then
-            elem(ie)%state%Q(:,:,k,:)           = elem(ie)%state%prvQ(:,:,k,:)
+            elem(ie)%state%Q(:,:,k,:)             = elem(ie)%state%prvQ(:,:,k,:)
           end if
         end do
 
