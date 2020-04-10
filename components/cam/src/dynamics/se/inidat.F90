@@ -19,6 +19,7 @@ module inidat
   use shr_kind_mod, only: r8 => shr_kind_r8
   use spmd_utils,   only: iam, masterproc
   use cam_control_mod, only : ideal_phys, aqua_planet, pertlim, seed_custom, seed_clock, new_random
+  use cam_control_mod, only : do_thermal_seed, thermal_seed_form, thermal_seed_limit ! (ASXM)
   use random_xgc, only: init_ranx, ranx
   use scamMod, only: single_column, precip_off, scmlat, scmlon
   implicit none
@@ -99,6 +100,15 @@ contains
     integer :: nlev_tot
 
     logical :: iop_update_surface
+
+    ! ASXM (BEG)
+    ! two forms of thermal seed are introduced: dtmnSeed and randSeed.
+    ! take thermal_seed_limit as 0.1
+    !  1) dtmnSeed: 0.1, 0.08, 0.06, 0.04 and 0.02 K for the lowest 5 levels
+    !  2) randSeed: random in the range of [0, 0.1), [0, 0.08), [0, 0.06), [0, 0.04) and [0, 0.02) K for the lowest 5 levels
+    real(r8) :: lwLMT = 0.0_r8
+    real(r8) :: upLMT ! vary with model levels    
+    ! ASXM (END)
 
     tl = 1
 
@@ -250,7 +260,7 @@ contains
        end do
     end do
 
-    if (pertlim .ne. D0_0) then
+    if (pertlim .ne. D0_0) then ! pertlim is zero by default (CSXM)
       if(masterproc) then
         write(iulog,*) trim(subname), ': Adding random perturbation bounded', &
                        'by +/- ', pertlim, ' to initial temperature field'
@@ -283,8 +293,9 @@ contains
               if (new_random) then
                 pertval = ranx()
               else
-                call random_number(pertval)
+                call random_number(pertval) ! pertval is the generated random number (CSXM)
               endif
+              ! pertval is in the range of [0, 1), thus 2*pertlim*(0.5-pertval) = perlim*(1.0-2*pertval) is in the range of pertlim*[-1, 1) = [-pertlim, pertlim) (CSXM)
               pertval = D2_0*pertlim*(D0_5 - pertval)
 #ifdef MODEL_THETA_L
               elem(ie)%derived%FT(i,j,k) = elem(ie)%derived%FT(i,j,k)*(D1_0 + pertval)
@@ -298,6 +309,77 @@ contains
 
       deallocate(rndm_seed)
     end if
+
+    ! ASXM (BEG)
+    ! 1. Add thermal seed at the lowest 5 levels or below a specified height (not yet addressed) to the 3D IC.
+    ! 2. For SCM, if no other SCM-related modifications are included, the random seed introduced here will be overwritten by a call to subroutine readiopdata later in this module.
+    if(do_thermal_seed) then
+      if(masterproc) then
+        write(iulog,*) trim(subname), ': Adding thermal seed at the lowest 5 levels for 3D runs'
+      end if
+
+      ! step00: initialize rndm_seed
+      if(new_random) then
+        rndm_seed_sz = 1
+      else
+        call random_seed(size=rndm_seed_sz)
+      endif
+      allocate(rndm_seed(rndm_seed_sz))
+
+      do ie =1, nelemd
+      do i  =1, np
+      do j  =1, np
+      do k  = nlev, nlev-4, -1 ! for the lowest 5 levels only
+
+        ! step01: seeding
+        ! seed random number generator based on element ID
+        rndm_seed(:) = elem(ie)%GlobalId + i*3 + j*2 + k*1 ! added i*3 + j*2 + k*1 to have different random seed at each level when seed_custom and seed_clock are off
+        if(seed_custom > 0) rndm_seed(:) = ieor(rndm_seed(1), int(seed_custom,kind(rndm_seed(1))))
+        if(seed_clock) then
+          call system_clock(sysclk)
+          rndm_seed(:) = ieor(sysclk, int(rndm_seed(1), kind(sysclk)))
+        endif
+        if(new_random) then
+          call init_ranx(rndm_seed(1))
+        else
+          ! When the seed_custom and seed_clock are off,
+          !   1) the generated random numbers by a later call of random_number(pertval) differ for different ie-i-j-k
+          !   2) these random numbers, however, are the same every time this subroutine is called.
+          !   3) different runs will thus get the same random seeds for BFB (consistent with namelist_definition.xml).
+          call random_seed(put=rndm_seed) ! replaced with "call random_seed()" in brnchM but not in brnchR here          
+        endif
+
+        ! step02: random number in the range of [0, 1)
+        if(new_random) then
+          pertval = ranx()
+        else
+          call random_number(pertval) ! pertval is the generated random number
+        endif
+
+        ! step03: adjust the random number in the rang of A to B: A+(B-A)*randNum
+        if(k == nlev)   upLMT = thermal_seed_limit*1.0_r8
+        if(k == nlev-1) upLMT = thermal_seed_limit*0.8_r8
+        if(k == nlev-2) upLMT = thermal_seed_limit*0.6_r8 
+        if(k == nlev-3) upLMT = thermal_seed_limit*0.4_r8
+        if(k == nlev-4) upLMT = thermal_seed_limit*0.2_r8
+        if(thermal_seed_form .eq. 'randSeed') then
+          pertval = lwLMT + (upLMT-lwLMT)*pertval
+        end if
+        if(thermal_seed_form .eq. 'dtmnSeed') then
+          pertval = upLMT
+        end if        
+#ifdef MODEL_THETA_L
+        elem(ie)%derived%FT(i,j,k) = elem(ie)%derived%FT(i,j,k) + pertval
+#else
+        elem(ie)%state%T(i,j,k,tl) = elem(ie)%state%T(i,j,k,tl) + pertval
+#endif
+      end do
+      end do
+      end do
+      end do ! ie loop
+      deallocate(rndm_seed)
+    end if
+    ! ASXM (END)
 
     if (associated(ldof)) then
        call endrun(trim(subname)//': ldof should not be associated')
@@ -420,7 +502,7 @@ contains
       nullify(gcid)
     end if
 
-    fieldname = 'PS'
+    fieldname = 'PS' ! 'Ps' in IOP and does not matter as F90 is case insensitive (CSXM)
     tmp(:,1,:) = 0.0_r8
     call infld(fieldname, ncid_ini, ncol_name,      &
          1, npsq, 1, nelemd, tmp(:,1,:), found, gridname=grid_name)
@@ -450,7 +532,7 @@ contains
     end do
 
     if ( (ideal_phys .or. aqua_planet)) then
-       tmp(:,1,:) = 0._r8
+       tmp(:,1,:) = 0._r8 ! set phis as zero for aqua_planet (CSXM)
     else    
       fieldname = 'PHIS'
       tmp(:,1,:) = 0.0_r8
@@ -484,9 +566,81 @@ contains
     
     if (single_column) then
       iop_update_surface = .false.
-      call setiopupdate()
-      call readiopdata(iop_update_surface,hyam,hybm)
-      call scm_setinitial(elem)
+      call setiopupdate()                            ! open and read netCDF to extract tm info (in scamMod.F90) (CSXM)
+      call readiopdata(iop_update_surface,hyam,hybm) ! open and read netCDF containing IOP "initial conditions" (CSXM)
+      call scm_setinitial(elem)                      ! set SCM IC: T, q, u, v, ps, numliq, cldliq, numice, cldice, omega_p by IOP-obs; taken state% or derived% if relevant data is unaviable in IOP-obs (CSXM)
+
+      ! ASXM (BEG)
+      ! 1. Add thermal seed at the lowest 5 levels or below a specified height (not yet addressed) to the 1D IC.
+      ! 2. Since this module (inidat.F90) is only called once for initialization, the following modifications only affect the IC reading from IOP for temperature.
+      if(do_thermal_seed) then
+        if(masterproc) then
+          write(iulog,*) trim(subname), ': Adding thermal seed at the lowest 5 levels for 1D runs'
+        end if
+
+        ! step00: initialize rndm_seed
+        if(new_random) then
+          rndm_seed_sz = 1
+        else
+          call random_seed(size=rndm_seed_sz)
+        endif
+        allocate(rndm_seed(rndm_seed_sz))
+
+        do ie = 1, nelemd
+        do j = 1, np
+        do i = 1, np
+        do k = nlev, nlev-4, -1 ! for the lowest 5 levels only
+
+          ! step01: seeding
+          ! seed random number generator based on element ID
+          rndm_seed(:) = elem(ie)%GlobalId + i*3 + j*2 + k*1 ! added i*3 + j*2 + k*1 to have different random seed at each level when seed_custom and seed_clock are off
+          if(seed_custom > 0) rndm_seed(:) = ieor(rndm_seed(1), int(seed_custom,kind(rndm_seed(1))))
+          if(seed_clock) then
+            call system_clock(sysclk)
+            rndm_seed(:) = ieor(sysclk, int(rndm_seed(1), kind(sysclk)))
+          endif
+          if(new_random) then
+            call init_ranx(rndm_seed(1))
+          else
+            ! When the seed_custom and seed_clock are off,
+            !   1) the generated random numbers by a later call of random_number(pertval) differ for different ie-i-j-k
+            !   2) these random numbers, however, are the same every time this subroutine is called.
+            !   3) different runs will thus get the same random seeds for BFB (consistent with namelist_definition.xml).
+            call random_seed(put=rndm_seed) ! replaced with "call random_seed()" in brnchM but not in brnchR here        
+          endif
+
+          ! step02: random number in the range of [0, 1)
+          if(new_random) then
+            pertval = ranx()
+          else
+            call random_number(pertval) ! pertval is the generated random number
+          endif
+
+          ! step03: adjust the random number in the rang of A to B: A+(B-A)*randNum
+          if(k == nlev)   upLMT = thermal_seed_limit*1.0_r8
+          if(k == nlev-1) upLMT = thermal_seed_limit*0.8_r8
+          if(k == nlev-2) upLMT = thermal_seed_limit*0.6_r8 
+          if(k == nlev-3) upLMT = thermal_seed_limit*0.4_r8
+          if(k == nlev-4) upLMT = thermal_seed_limit*0.2_r8
+          if(thermal_seed_form .eq. 'randSeed') then
+            pertval = lwLMT + (upLMT-lwLMT)*pertval 
+          end if
+          if(thermal_seed_form .eq. 'dtmnSeed') then
+            pertval = upLMT
+          end if
+#ifdef MODEL_THETA_L
+          elem(ie)%derived%FT(i,j,k) = elem(ie)%derived%FT(i,j,k) + pertval
+#else
+          elem(ie)%state%T(i,j,k,tl) = elem(ie)%state%T(i,j,k,tl) + pertval
+#endif
+        end do            
+        end do
+        end do
+        end do ! ie loop
+        deallocate(rndm_seed)
+      end if
+      ! ASXM (END)
+
     endif
 
     if (.not. single_column) then    
@@ -563,7 +717,7 @@ contains
        !FT used as tmp array - reset
        elem(ie)%derived%FT = 0.0
 #else
-       call set_thermostate(elem(ie),ps,elem(ie)%state%T(:,:,:,tl),hvcoord)
+       call set_thermostate(elem(ie),ps,elem(ie)%state%T(:,:,:,tl),hvcoord) ! calculate dry theta and phis under hydrosatic balance (CSXM)
 #endif
     end do
 

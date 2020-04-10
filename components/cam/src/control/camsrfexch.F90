@@ -406,6 +406,8 @@ subroutine cam_export(state,cam_out,pbuf)
    use constituents,     only: pcnst
    use cam_control_mod,  only: rair
    use physics_buffer,   only: pbuf_get_index, pbuf_get_field, physics_buffer_desc
+   use cam_control_mod,  only: constant_srfgust, constant_srfgust_form ! (ASXM)
+
    implicit none
 
    !------------------------------Arguments--------------------------------
@@ -484,6 +486,44 @@ subroutine cam_export(state,cam_out,pbuf)
         cam_out%qbot(i,m) = state%q(i,pver,m) 
      end do
    end do
+
+   ! ASXM (BEG)
+   ! gustiness to surface scheme for RCE simulations (Sep. 2019)  
+   if(constant_srfgust .gt. 0._r8) then
+      do i = 1, ncol
+         umb(i)  = cam_out%ubot(i) ! take cam_out%ubot, instead of state%u(i,pver), to be on top of the PMA gustiness
+         vmb(i)  = cam_out%vbot(i) ! take cam_out%vbot, instead of state%v(i,pver), to be on top of the PMA gustiness
+         vmag(i) = sqrt(umb(i)**2._r8 + vmb(i)**2._r8)
+
+         ! minGust: max(Vresol, constant_srfgust)
+         if(constant_srfgust_form .eq. 'minGust') then
+            if(vmag(i) .gt. 0._r8) then
+               if(vmag(i) .lt. constant_srfgust) then
+                  cam_out%ubot(i) = cam_out%ubot(i) * constant_srfgust/vmag(i)
+                  cam_out%vbot(i) = cam_out%vbot(i) * constant_srfgust/vmag(i)
+               else
+                  cam_out%ubot(i) = cam_out%ubot(i)
+                  cam_out%vbot(i) = cam_out%vbot(i)
+               end if
+            else
+               cam_out%ubot(i) = sqrt(constant_srfgust**2._r8/2._r8)
+               cam_out%vbot(i) = sqrt(constant_srfgust**2._r8/2._r8)
+            end if          
+         end if
+
+         ! quadGust: V = sqrt(Vresol**2 + constant_srfgust**2)
+         if(constant_srfgust_form .eq. 'quadGust') then
+            if(vmag(i) .gt. 0._r8) then
+               cam_out%ubot(i) = cam_out%ubot(i) * sqrt(vmag(i)**2._r8 + constant_srfgust**2._r8)/vmag(i)
+               cam_out%vbot(i) = cam_out%vbot(i) * sqrt(vmag(i)**2._r8 + constant_srfgust**2._r8)/vmag(i)
+            else
+               cam_out%ubot(i) = sqrt(constant_srfgust**2._r8/2._r8)
+               cam_out%vbot(i) = sqrt(constant_srfgust**2._r8/2._r8)
+            end if        
+         end if
+      end do
+   end if
+   ! ASXM (END)
 
    cam_out%co2diag(:ncol) = chem_surfvals_get('CO2VMR') * 1.0e+6_r8 
    if (co2_transport()) then

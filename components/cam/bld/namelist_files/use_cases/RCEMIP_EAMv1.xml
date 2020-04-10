@@ -33,14 +33,27 @@
 <!-- Use constant albedo -->
 <constant_albedo>0.07</constant_albedo>
 
+<!-- Use constant surface layer gustiness (ASXM) -->
+<constant_srfgust>1.0</constant_srfgust>                 <!-- ASXM: constant surface layer gustiness         -->
+<constant_srfgust_form>quadGust</constant_srfgust_form>  <!-- ASXM: form of constant surface layer gustiness -->
+
 <!-- disable aerosol radiative calculations - only works with RRTMGP -->
 <do_aerosol_rad>.false.</do_aerosol_rad>
+
+<!-- Use thermal seed at the lowest five levels during initialization (ASXM) -->
+<do_thermal_seed>.true.</do_thermal_seed>       <!-- ASXM: introduce thermal seed at the lowest five levels during initialization or not -->
+<thermal_seed_form>randSeed</thermal_seed_form> <!-- ASXM: form of thermal seed at the lowest five levels during initialization          -->
+<thermal_seed_limit>0.1</thermal_seed_limit>    <!-- ASXM: upper limit of thermal seed at the lowest five levels during intialization    -->
 
 <!-- ------------------------------------------------------------------------------------------ -->
 <!-- Revised physics constants for ape experiments (from CAM5/6 use case) -->
 <!-- ------------------------------------------------------------------------------------------ -->
 
 <sday>   0.0  </sday>
+<rearth> 6.37100e6 </rearth>  <!-- ASXM -->
+<gravit> 9.79764   </gravit>  <!-- ASXM -->
+<cpwv>   1.846e3   </cpwv>    <!-- ASXM -->
+
 <!-- <rearth> 6.37100e6          </rearth> -->
 <!-- <gravit> 9.79764         </gravit> -->
 <!-- <mwdry>  28.96623324623746  </mwdry> -->
@@ -52,8 +65,10 @@
 <!-- ------------------------------------------------------------------------------------------ -->
 <micro_do_nccons > .true.     </micro_do_nccons>
 <micro_do_nicons > .true.     </micro_do_nicons>
-<micro_nccons    > 70.0D6     </micro_nccons>
-<micro_nicons    > 0.0001D6   </micro_nicons>
+<!-- <micro_nccons    > 70.0D6     </micro_nccons> commented out by SXM-->
+<!-- <micro_nicons    > 0.0001D6   </micro_nicons> commented out by SXM-->
+<micro_nccons    > 100.0D6    </micro_nccons> <!-- 100 cm-3 = 100*10^6 m-3 = 10^8 m-3; consistent with RCEMIP and actually the default value in namelist_defnition.xml (ASXM) -->
+<micro_nicons    > 0.1D6      </micro_nicons> <!-- 0.1 cm-3 = 0.1*10^6 m-3 = 10^5 m-3; consistent with RCEMIP and actually the default value in namelist_defnition.xml (ASXM) -->
 
 <ext_frc_specifier    > '' </ext_frc_specifier>
 <srf_emis_specifier   > '' </srf_emis_specifier>
@@ -90,7 +105,7 @@
 <!-- ========================================================================================== -->
 
 <!-- Ice nucleation mods-->
-<use_hetfrz_classnuc       >.true.  </use_hetfrz_classnuc>
+<!-- <use_hetfrz_classnuc       >.true.  </use_hetfrz_classnuc> --> <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
 <use_preexisting_ice       >.false. </use_preexisting_ice>
 <hist_hetfrz_classnuc      >.false. </hist_hetfrz_classnuc>
 <micro_mg_dcs_tdep         >.true.  </micro_mg_dcs_tdep>
@@ -161,21 +176,30 @@
 <mg_prc_coeff_fix        >.true.    </mg_prc_coeff_fix>
 <rrtmg_temp_fix          >.true.    </rrtmg_temp_fix>
 
+<!-- 2019DecUpdt: Added by WHannh (BGN) CSXM -->
+<!-- Prescribed aerosols -->
+<prescribed_aero_datapath>atm/cam/chem/trop_mam/aero</prescribed_aero_datapath>
+<prescribed_aero_file>mam4_0.9x1.2_L72_2000clim_c170323.nc</prescribed_aero_file>
+<use_hetfrz_classnuc>.false.</use_hetfrz_classnuc>
+<prescribed_aero_type>CYCLICAL</prescribed_aero_type>
+<prescribed_aero_cycle_yr>01</prescribed_aero_cycle_yr>
+<!-- 2019DecUpdt: Added by WHannh (END) CSXM -->
+
 <!-- External forcing for BAM or MAM -->
-<soag_ext_file ver="mam" >atm/cam/chem/trop_mozart_aero/emis/aces4bgc_nvsoa_soag_elev_2000_c160427.nc </soag_ext_file>
+<!-- <soag_ext_file ver="mam" >atm/cam/chem/trop_mozart_aero/emis/aces4bgc_nvsoa_soag_elev_2000_c160427.nc </soag_ext_file> --> <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
 
 <!-- Surface emissions for MAM4 -->
-<dms_emis_file          >atm/cam/chem/trop_mozart_aero/emis/DMSflux.2000.1deg_latlon_conserv.POPmonthlyClimFromACES4BGC_c20160226.nc </dms_emis_file>
+<!-- <dms_emis_file          >atm/cam/chem/trop_mozart_aero/emis/DMSflux.2000.1deg_latlon_conserv.POPmonthlyClimFromACES4BGC_c20160226.nc </dms_emis_file> --> <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
 
 <!-- Marine organic aerosol namelist settings -->
-<mam_mom_mixing_state   >3          </mam_mom_mixing_state>
-<mam_mom_cycle_yr       >1          </mam_mom_cycle_yr>
-<mam_mom_fixed_tod      >0          </mam_mom_fixed_tod>
-<mam_mom_fixed_ymd      >0          </mam_mom_fixed_ymd>
-<mam_mom_datatype       >'CYCLICAL' </mam_mom_datatype>
-<mam_mom_datapath       >'atm/cam/chem/trop_mam/marine_BGC/' </mam_mom_datapath>
-<mam_mom_filename       >'monthly_macromolecules_0.1deg_bilinear_latlon_year01_merge_date.nc' </mam_mom_filename> 
-<mam_mom_specifier      >'chla:CHL1','mpoly:TRUEPOLYC','mprot:TRUEPROTC','mlip:TRUELIPC'      </mam_mom_specifier>
+<!-- <mam_mom_mixing_state   >3          </mam_mom_mixing_state> -->                                                        <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
+<!-- <mam_mom_cycle_yr       >1          </mam_mom_cycle_yr> -->                                                            <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
+<!-- <mam_mom_fixed_tod      >0          </mam_mom_fixed_tod>  -->                                                          <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
+<!-- <mam_mom_fixed_ymd      >0          </mam_mom_fixed_ymd> -->                                                           <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
+<!-- <mam_mom_datatype       >'CYCLICAL' </mam_mom_datatype> -->                                                            <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
+<!-- <mam_mom_datapath       >'atm/cam/chem/trop_mam/marine_BGC/' </mam_mom_datapath> -->                                   <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
+<!-- <mam_mom_filename       >'monthly_macromolecules_0.1deg_bilinear_latlon_year01_merge_date.nc' </mam_mom_filename>  --> <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
+<!-- <mam_mom_specifier      >'chla:CHL1','mpoly:TRUEPOLYC','mprot:TRUEPROTC','mlip:TRUELIPC'      </mam_mom_specifier> --> <!-- 2019DecUpdt: commented out by WHannah, CSXM-->
 
 <!-- Stratospheric ozone (Linoz) -->
 <chlorine_loading_file      >atm/cam/chem/trop_mozart/ub/EESC_1850-2100_c090603.nc</chlorine_loading_file>

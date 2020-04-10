@@ -120,7 +120,8 @@ class EnvMachSpecific(EnvBase):
             source_cmd = ""
 
         if (module_system in ["module"]):
-            return run_cmd_no_fail("{}module list".format(source_cmd), combine_output=True)
+            # return run_cmd_no_fail("{}module list".format(source_cmd), combine_output=True) # commented out per the instructions from Mathew Maltrud at LANL (CSXM)
+            return "" # added per the instructions from Mathew Maltrud at LANL (CSXM)
         elif (module_system == "soft"):
             # Does soft really not provide this capability?
             return ""

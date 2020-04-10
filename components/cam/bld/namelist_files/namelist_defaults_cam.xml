@@ -161,13 +161,19 @@
 <ncdata dyn="se" hgrid="ne240np4" nlev="26"             ic_ymd="901" >atm/cam/inic/homme/cami_0000-09-01_ne240np4_L26_c061106.nc</ncdata>
 
 <!-- E3SM Aquaplanet -->
-<ncdata dyn="se" hgrid="ne4np4"   nlev="72"  aquaplanet="1" ic_ymd="101" >atm/cam/inic/homme/cami_aquaplanet_ne4np4_L72_c190218.nc</ncdata>
-<ncdata dyn="se" hgrid="ne16np4"  nlev="72"  aquaplanet="1" ic_ymd="101" >atm/cam/inic/homme/cami_aquaplanet_ne16np4_L72_c190311.nc</ncdata>
-<ncdata dyn="se" hgrid="ne30np4"  nlev="72"  aquaplanet="1" ic_ymd="101" >atm/cam/inic/homme/cami_aquaplanet_ne30np4_L72_c190215.nc</ncdata>
+<!-- <ncdata dyn="se" hgrid="ne4np4"   nlev="72"  aquaplanet="1" ic_ymd="101" >atm/cam/inic/homme/cami_aquaplanet_ne4np4_L72_c190218.nc</ncdata>  --> <!-- commented out by SXM -->
+<!-- <ncdata dyn="se" hgrid="ne16np4"  nlev="72"  aquaplanet="1" ic_ymd="101" >atm/cam/inic/homme/cami_aquaplanet_ne16np4_L72_c190311.nc</ncdata> --> <!-- commented out by SXM -->
+<!-- <ncdata dyn="se" hgrid="ne30np4"  nlev="72"  aquaplanet="1" ic_ymd="101" >atm/cam/inic/homme/cami_aquaplanet_ne30np4_L72_c190215.nc</ncdata> --> <!-- commented out by SXM -->
+<ncdata dyn="se" hgrid="ne4np4"   nlev="72"  aquaplanet="1" ic_ymd="101" >atm/cam/inic/homme/Rcami_rcemip_ne4np4_L72_295K_SXMRefn_c191231.nc</ncdata>   <!-- ASXM -->
+<ncdata dyn="se" hgrid="ne30np4"  nlev="72"  aquaplanet="1" ic_ymd="101" >atm/cam/inic/homme/Rcami_rcemip_ne30np4_L72_295K_SXMRefn_c191231.nc</ncdata>  <!-- ASXM -->
+<ncdata dyn="se" hgrid="ne120np4" nlev="72"  aquaplanet="1" ic_ymd="101" >atm/cam/inic/homme/Rcami_rcemip_ne120np4_L72_295K_SXMRefn_c191231.nc</ncdata> <!-- ASXM -->
 
 <!-- E3SM RCE -->
-<ncdata dyn="se" hgrid="ne4np4"   nlev="72"  aquaplanet="1" rce="1" ic_ymd="101" >atm/cam/inic/homme/cami_rcemip_ne4np4_L72_c190919.nc</ncdata>
-<ncdata dyn="se" hgrid="ne30np4"  nlev="72"  aquaplanet="1" rce="1" ic_ymd="101" >atm/cam/inic/homme/cami_rcemip_ne30np4_L72_c190919.nc</ncdata>
+<!-- <ncdata dyn="se" hgrid="ne4np4"   nlev="72"  aquaplanet="1" rce="1" ic_ymd="101" >atm/cam/inic/homme/cami_rcemip_ne4np4_L72_c190919.nc</ncdata>  -->     <!-- commented out by SXM -->
+<!-- <ncdata dyn="se" hgrid="ne30np4"  nlev="72"  aquaplanet="1" rce="1" ic_ymd="101" >atm/cam/inic/homme/cami_rcemip_ne30np4_L72_c190919.nc</ncdata> -->     <!-- commented out by SXM -->
+<ncdata dyn="se" hgrid="ne4np4"   nlev="72"  aquaplanet="1" rce="1" ic_ymd="101" >atm/cam/inic/homme/Rcami_rcemip_ne4np4_L72_295K_SXMRefn_c191231.nc</ncdata>   <!-- ASXM -->
+<ncdata dyn="se" hgrid="ne30np4"  nlev="72"  aquaplanet="1" rce="1" ic_ymd="101" >atm/cam/inic/homme/Rcami_rcemip_ne30np4_L72_295K_SXMRefn_c191231.nc</ncdata>  <!-- ASXM -->
+<ncdata dyn="se" hgrid="ne120np4" nlev="72"  aquaplanet="1" rce="1" ic_ymd="101" >atm/cam/inic/homme/Rcami_rcemip_ne120np4_L72_295K_SXMRefn_c191231.nc</ncdata> <!-- ASXM -->
 
 <ncdata dyn="se" hgrid="ne240np4" nlev="30"              >atm/cam/inic/homme/cami-mam3_0000-01-ne240np4_L30_c111004.nc</ncdata>
 <ncdata dyn="se" hgrid="ne240np4" nlev="72"              >atm/cam/inic/homme/cami_mam4_Linoz_0001-01-ne240np4_L72_c170910.nc</ncdata>
@@ -1386,7 +1392,7 @@
 <raytau0>                     0.0    </raytau0>
 <do_aerosol_rad>              .true.   </do_aerosol_rad>
 <fixed_total_solar_irradiance>-1       </fixed_total_solar_irradiance>
-
+<do_thermal_seed>             .false.  </do_thermal_seed> <!-- ASXM -->
 
 <!-- ================================================================== -->
 <!-- Defaults for SE                                                    -->
@@ -1585,6 +1591,14 @@
 <constant_zenith_deg>-1</constant_zenith_deg>
 
 <constant_albedo>-1</constant_albedo>
+
+<constant_srfgust>-1</constant_srfgust>             <!-- ASXM -->
+
+<constant_srfgust_form>none</constant_srfgust_form> <!-- ASXM -->
+
+<thermal_seed_form>none</thermal_seed_form>         <!-- ASXM -->
+
+<thermal_seed_limit>0.0</thermal_seed_limit>        <!-- ASXM -->
 
 <ocean_tight_coupling >.true.</ocean_tight_coupling>
 
