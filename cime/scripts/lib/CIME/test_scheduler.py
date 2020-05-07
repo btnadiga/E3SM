@@ -123,7 +123,7 @@ class TestScheduler(object):
                  allow_baseline_overwrite=False, output_root=None,
                  force_procs=None, force_threads=None, mpilib=None,
                  input_dir=None, pesfile=None, mail_user=None, mail_type=None, allow_pnl=False,
-                 non_local=False, single_exe=False):
+                 non_local=False, single_exe=False, workflow=None):
     ###########################################################################
         self._cime_root       = get_cime_root()
         self._cime_model      = get_model()
@@ -139,13 +139,17 @@ class TestScheduler(object):
         self._allow_pnl       = allow_pnl
         self._non_local       = non_local
         self._build_groups    = []
+        self._workflow        = workflow
 
         self._mail_user = mail_user
         self._mail_type = mail_type
 
         self._machobj = Machines(machine=machine_name)
 
-        self._model_build_cost = 4
+        if get_model() == "e3sm":
+            self._model_build_cost = int((self._machobj.get_value("GMAKE_J") * 2) / 3) + 1
+        else:
+            self._model_build_cost = 4
 
         # If user is forcing procs or threads, re-write test names to reflect this.
         if force_procs or force_threads:
@@ -198,17 +202,17 @@ class TestScheduler(object):
         else:
             self._parallel_jobs = parallel_jobs
 
+        logger.info("create_test will do up to {} tasks simultaneously".format(self._parallel_jobs))
+
         self._baseline_cmp_name = baseline_cmp_name # Implies comparison should be done if not None
         self._baseline_gen_name = baseline_gen_name # Implies generation should be done if not None
 
-        # Compute baseline_root
-        self._baseline_root = baseline_root if baseline_root is not None \
+        # Compute baseline_root. Need to set some properties on machobj in order for
+        # the baseline_root to resolve correctly.
+        self._machobj.set_value("COMPILER", self._compiler)
+        self._machobj.set_value("PROJECT", self._project)
+        self._baseline_root = os.path.abspath(baseline_root) if baseline_root is not None \
                               else self._machobj.get_value("BASELINE_ROOT")
-
-        if self._project is not None:
-            self._baseline_root = self._baseline_root.replace("$PROJECT", self._project)
-
-        self._baseline_root = os.path.abspath(self._baseline_root)
 
         if baseline_cmp_name or baseline_gen_name:
             if self._baseline_cmp_name:
@@ -246,6 +250,8 @@ class TestScheduler(object):
             self._proc_pool = int(pes * 1.25)
         else:
             self._proc_pool = int(proc_pool)
+
+        logger.info("create_test will use up to {} cores simultaneously".format(self._proc_pool))
 
         self._procs_avail = self._proc_pool
 
@@ -416,7 +422,7 @@ class TestScheduler(object):
                 self._log_output(test,
                                  "{} FAILED for test '{}'.\nCommand: {}\nOutput: {}\n".
                                  format(phase, test, cmd,
-                                        output.encode('utf-8') + b"\n" + errput.encode('utf-8')))
+                                        output + "\n" + errput))
                 # Temporary hack to get around odd file descriptor use by
                 # buildnml scripts.
                 if "bad interpreter" in output:
@@ -431,7 +437,7 @@ class TestScheduler(object):
                 self._log_output(test,
                                  "{} PASSED for test '{}'.\nCommand: {}\nOutput: {}\n".
                                  format(phase, test, cmd,
-                                        output.encode('utf-8') + b"\n" + errput.encode('utf-8')))
+                                        output + "\n" + errput))
                 return True, errput
 
     ###########################################################################
@@ -457,6 +463,8 @@ class TestScheduler(object):
             create_newcase_cmd += " --input-dir {} ".format(self._input_dir)
         if self._non_local:
             create_newcase_cmd += " --non-local"
+        if self._workflow:
+            create_newcase_cmd += " --workflow {}".format(self._workflow)
 
         if self._pesfile is not None:
             create_newcase_cmd += " --pesfile {} ".format(self._pesfile)
@@ -536,6 +544,9 @@ class TestScheduler(object):
                 if test in self._test_data and "options" in self._test_data[test] and \
                         "wallclock" in self._test_data[test]['options']:
                     create_newcase_cmd += " --walltime {}".format(self._test_data[test]['options']['wallclock'])
+        if test in self._test_data and "options" in self._test_data[test] and \
+                        "workflow" in self._test_data[test]['options']:
+            create_newcase_cmd += " --workflow {}".format(self._test_data[test]['options']['workflow'])
 
         logger.debug("Calling create_newcase: " + create_newcase_cmd)
         return self._shell_cmd_for_phase(test, create_newcase_cmd, CREATE_NEWCASE_PHASE)
@@ -638,6 +649,7 @@ class TestScheduler(object):
                         envtest.set_test_parameter("NTASKS_"+comp, "1")
                         envtest.set_test_parameter("NTHRDS_"+comp, "1")
                         envtest.set_test_parameter("ROOTPE_"+comp, "0")
+                        envtest.set_test_parameter("PIO_TYPENAME", "netcdf")
 
                 elif (opt.startswith('I') or # Marker to distinguish tests with same name - ignored
                       opt.startswith('M') or # handled in create_newcase
@@ -797,7 +809,7 @@ class TestScheduler(object):
             return total_pes
 
         elif (phase == SHAREDLIB_BUILD_PHASE):
-            if self._cime_model == "cesm":
+            if self._cime_model != "e3sm":
                 # Will force serialization of sharedlib builds
                 # TODO - instead of serializing, compute all library configs needed and build
                 # them all in parallel
@@ -861,7 +873,7 @@ class TestScheduler(object):
 
         if not success:
             status_str += "\n    Case dir: {}\n".format(self._get_test_dir(test))
-            status_str += "    Errors were:\n        {}\n".format("\n        ".join(str(errors.encode('utf-8')).splitlines()))
+            status_str += "    Errors were:\n        {}\n".format("\n        ".join(errors.splitlines()))
 
         logger.info(status_str)
 
