@@ -2105,7 +2105,9 @@ ntel/x86_64/2013/composer_xe_2013/composer_xe_2013_sp1.3.174/mkl/include </base>
 </compiler>
 
 <compiler MACH="grizzly" COMPILER="gnu">
+  <NETCDF_PATH>$ENV{NETCDF_PATH}</NETCDF_PATH>
   <PIO_FILESYSTEM_HINTS>lustre</PIO_FILESYSTEM_HINTS>
+  <PNETCDF_PATH>$ENV{PNETCDF_PATH}</PNETCDF_PATH>
   <MPICC>mpicc</MPICC>
   <MPIFC>mpif90</MPIFC>
   <MPICXX>mpic++</MPICXX>
@@ -2117,12 +2119,14 @@ ntel/x86_64/2013/composer_xe_2013/composer_xe_2013_sp1.3.174/mkl/include </base>
     <append>$ENV{MKLROOT}/lib/intel64/libmkl_scalapack_lp64.a -Wl,--start-group $ENV{MKLROOT}/lib/intel64/libmkl_intel_lp64.a $ENV{MKLROOT}/lib/intel64/libmkl_core.a $ENV{MKLROOT}/lib/intel64/libmkl_sequential.a -Wl,--end-group $ENV{MKLROOT}/lib/intel64/libmkl_blacs_intelmpi_lp64.a -lpthread -lm -z muldefs</append>
   </SLIBS>
   <CXX_LIBS>
-    <base>-lstdc++ -lmpi_cxx</base>
+    <base>-lstdc++ -lmpicxx</base>
   </CXX_LIBS>
 </compiler>
 
 <compiler MACH="grizzly" COMPILER="intel">
+  <NETCDF_PATH>$ENV{NETCDF_PATH}</NETCDF_PATH>
   <PIO_FILESYSTEM_HINTS>lustre</PIO_FILESYSTEM_HINTS>
+  <PNETCDF_PATH>$ENV{PNETCDF_PATH}</PNETCDF_PATH>
   <MPICC>mpicc</MPICC>
   <MPIFC>mpif90</MPIFC>
   <MPICXX>mpic++</MPICXX>
@@ -2134,7 +2138,7 @@ ntel/x86_64/2013/composer_xe_2013/composer_xe_2013_sp1.3.174/mkl/include </base>
     <append>-mkl -lpthread</append>
   </SLIBS>
   <CXX_LIBS>
-    <base>-lstdc++ -lmpi_cxx</base>
+    <base>-lstdc++ -lmpicxx</base>
   </CXX_LIBS>
 </compiler>
 
