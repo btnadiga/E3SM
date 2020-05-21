@@ -501,9 +501,6 @@ subroutine cam_export(state,cam_out,pbuf)
                if(vmag(i) .lt. constant_srfgust) then
                   cam_out%ubot(i) = cam_out%ubot(i) * constant_srfgust/vmag(i)
                   cam_out%vbot(i) = cam_out%vbot(i) * constant_srfgust/vmag(i)
-               else
-                  cam_out%ubot(i) = cam_out%ubot(i)
-                  cam_out%vbot(i) = cam_out%vbot(i)
                end if
             else
                cam_out%ubot(i) = sqrt(constant_srfgust**2._r8/2._r8)
