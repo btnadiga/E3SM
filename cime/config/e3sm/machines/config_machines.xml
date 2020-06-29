@@ -2386,7 +2386,7 @@
         <command name="load">mkl</command>
       </modules>
       <modules>
-        <command name="load">cmake/3.9.0</command>
+        <command name="load">cmake/3.16.2</command>
       </modules>
     </module_system>
     <RUNDIR>/lustre/scratch3/turquoise/$ENV{USER}/E3SM/cases/$CASE/run</RUNDIR>

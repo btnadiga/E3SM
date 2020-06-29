@@ -814,9 +814,10 @@ my $rad_pkg = $cfg->get('rad');
 if ($rad_pkg eq 'rrtmgp') {
   add_default($nl,'do_aerosol_rad');
   add_default($nl,'fixed_total_solar_irradiance');
-  # introduce thermal seed during initialization (defaults is .false.) (ASXM)
-  add_default($nl,'do_thermal_seed');
 }
+
+# introduce thermal seed during initialization (defaults is .false.) (ASXM)
+add_default($nl,'do_thermal_seed');
 
 #
 # Simulated years: sim_year and sim_year_start
