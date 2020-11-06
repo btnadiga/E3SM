@@ -43,6 +43,8 @@ module rof_cpl_indices
   integer, public :: index_x2r_Faxa_swndf = 0   ! atm->rof shorwave near-ir diffus flux
   integer, public :: nflds_x2r = 0
 
+  integer, public :: index_x2r_coszen_str  = 0   ! lnd->rof Cosine of Zenith
+
   !TODO - nt_rtm and rtm_tracers need to be removed and set by access to the index array
   integer, parameter, public :: nt_rtm = 2    ! number of tracers
   character(len=3), parameter, public :: rtm_tracers(nt_rtm) =  (/'LIQ','ICE'/)
@@ -75,7 +77,7 @@ contains
     ! runoff - (rof -> ocn) and (rof->lnd)
     !
     ! !USES:
-    use seq_flds_mod  , only: seq_flds_r2x_fields, seq_flds_x2r_fields
+    use seq_flds_mod  , only: seq_flds_r2x_fields, seq_flds_x2r_fields, rof_heat
     use mct_mod       , only: mct_aVect, mct_aVect_init, mct_avect_indexra, &
                               mct_aVect_clean, mct_avect_nRattr
     !
@@ -102,16 +104,20 @@ contains
     index_x2r_Flrl_demand = mct_avect_indexra(avtmp,'Flrl_demand')
     index_x2r_Flrl_Tqsur  = mct_avect_indexra(avtmp,'Flrl_Tqsur')
     index_x2r_Flrl_Tqsub  = mct_avect_indexra(avtmp,'Flrl_Tqsub')
-    index_x2r_Sa_tbot     = mct_avect_indexra(avtmp,'Sa_tbot')
-    index_x2r_Sa_pbot     = mct_avect_indexra(avtmp,'Sa_pbot')
-    index_x2r_Sa_u        = mct_avect_indexra(avtmp,'Sa_u')
-    index_x2r_Sa_v        = mct_avect_indexra(avtmp,'Sa_v')
-    index_x2r_Sa_shum     = mct_avect_indexra(avtmp,'Sa_shum')
-    index_x2r_Faxa_lwdn   = mct_avect_indexra(avtmp,'Faxa_lwdn')
-    index_x2r_Faxa_swvdr  = mct_avect_indexra(avtmp,'Faxa_swvdr')
-    index_x2r_Faxa_swvdf  = mct_avect_indexra(avtmp,'Faxa_swvdf')
-    index_x2r_Faxa_swndr  = mct_avect_indexra(avtmp,'Faxa_swndr')
-    index_x2r_Faxa_swndf  = mct_avect_indexra(avtmp,'Faxa_swndf')
+    if (rof_heat) then
+      index_x2r_Sa_tbot     = mct_avect_indexra(avtmp,'Sa_tbot')
+      index_x2r_Sa_pbot     = mct_avect_indexra(avtmp,'Sa_pbot')
+      index_x2r_Sa_u        = mct_avect_indexra(avtmp,'Sa_u')
+      index_x2r_Sa_v        = mct_avect_indexra(avtmp,'Sa_v')
+      index_x2r_Sa_shum     = mct_avect_indexra(avtmp,'Sa_shum')
+      index_x2r_Faxa_lwdn   = mct_avect_indexra(avtmp,'Faxa_lwdn')
+      index_x2r_Faxa_swvdr  = mct_avect_indexra(avtmp,'Faxa_swvdr')
+      index_x2r_Faxa_swvdf  = mct_avect_indexra(avtmp,'Faxa_swvdf')
+      index_x2r_Faxa_swndr  = mct_avect_indexra(avtmp,'Faxa_swndr')
+      index_x2r_Faxa_swndf  = mct_avect_indexra(avtmp,'Faxa_swndf')
+    endif
+
+    index_x2r_coszen_str  = mct_avect_indexra(avtmp,'coszen_str')
 
     nflds_x2r = mct_avect_nRattr(avtmp)
 

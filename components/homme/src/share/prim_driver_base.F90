@@ -199,6 +199,9 @@ contains
     use quadrature_mod, only : test_gauss, test_gausslobatto
     use repro_sum_mod,  only : repro_sum_defaultopts, repro_sum_setopts
     use time_mod,       only : nmax, time_at
+#ifndef HOMME_WITHOUT_PIOLIBRARY
+    use common_io_mod,  only : homme_pio_init
+#endif
     !
     ! Inputs
     !
@@ -221,6 +224,9 @@ contains
     else
        total_nelem = CubeElemCount()
     end if
+#ifndef HOMME_WITHOUT_PIOLIBRARY
+    call homme_pio_init(par%rank,par%comm)
+#endif
 
     approx_elements_per_task = dble(total_nelem)/dble(par%nprocs)
     if  (approx_elements_per_task < 1.0D0) then
@@ -739,7 +745,7 @@ contains
                                     debug_level, vfile_int, vform, vfile_mid, &
                                     topology, dt_remap_factor, dt_tracer_factor,&
                                     sub_case, limiter_option, nu, nu_q, nu_div, tstep_type, hypervis_subcycle, &
-                                    hypervis_subcycle_q, moisture, use_moisture, hypervis_subcycle_tom
+                                    hypervis_subcycle_q, hypervis_subcycle_tom
     use global_norms_mod,     only: test_global_integral, print_cfl
     use hybvcoord_mod,        only: hvcoord_t
     use parallel_mod,         only: parallel_t, haltmp, syncmp, abortmp
@@ -827,10 +833,6 @@ contains
     if (topology == "cube") then
        call test_global_integral(elem, hybrid,nets,nete)
     end if
-
-    ! should we assume Q(:,:,:,1) has water vapor:
-    use_moisture = ( moisture /= "dry") 
-    if (qsize<1) use_moisture = .false.  
 
 
     ! compute most restrictive dt*nu for use by variable res viscosity:
@@ -992,11 +994,6 @@ contains
     ! may also adjust tensor coefficients based on CFL
     call print_cfl(elem,hybrid,nets,nete,dtnu)
 
-    ! smooth elem%phis if requested.
-    if (smooth_phis_numcycle>0) &
-          call smooth_topo_datasets(elem,hybrid,nets,nete)
-
-
     if (hybrid%masterthread) then
        ! CAM has set tstep based on dtime before calling prim_init2(),
        ! so only now does HOMME learn the timstep.  print them out:
@@ -1151,8 +1148,8 @@ contains
        nstep_end = tl%nstep + dt_tracer_factor
     else
        ! dt_remap_factor = 0 means use eulerian code, not vert. lagrange
+       dt_remap  = dt*dt_remap_factor
        step_factor = max(dt_remap_factor, dt_tracer_factor)
-       dt_remap  = dt*step_factor
        nstep_end = tl%nstep + step_factor ! nstep at end of this routine
     endif
 
@@ -1166,6 +1163,7 @@ contains
     ! compute scalar diagnostics if currently active
     if (compute_diagnostics) call run_diagnostics(elem,hvcoord,tl,3,.true.,nets,nete)
 
+!<<<<<<< HEAD
     !call TimeLevel_Qdp(tl, qsplit, n0_qdp, np1_qdp)
     call TimeLevel_Qdp(tl, dt_tracer_factor, n0_qdp, np1_qdp)
 
@@ -1292,18 +1290,32 @@ contains
     ! For dry hydrostatic BW, ftype = 0 (CSXM)
     ! if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) print *, 'PRS: ftype=', ftype ! DSXM      
     call applyCAMforcing_remap(elem,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete)
+!!!!!=======
 
-    ! E(1) Energy after CAM forcing
-    if (compute_diagnostics) call run_diagnostics(elem,hvcoord,tl,1,.true.,nets,nete)
+!    if (.not. independent_time_steps) then
+!       call TimeLevel_Qdp(tl, dt_tracer_factor, n0_qdp, np1_qdp)
+
+!#ifndef CAM
+       ! compute HOMME test case forcing
+       ! by calling it here, it mimics eam forcings computations in standalone
+       ! homme.
+!       call compute_test_forcing(elem,hybrid,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete,tl)
+!#endif
+
+!       call applyCAMforcing_remap(elem,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete)
+
+!!!!>>>>>>> MAIN/master
+
+       ! E(1) Energy after CAM forcing
+       if (compute_diagnostics) call run_diagnostics(elem,hvcoord,tl,1,.true.,nets,nete)
 
 #if (USE_OPENACC)
-!    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
-    call t_startf("copy_qdp_h2d")
-    call copy_qdp_h2d( elem , n0_qdp )
-    call t_stopf("copy_qdp_h2d")
+       !    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
+       call t_startf("copy_qdp_h2d")
+       call copy_qdp_h2d( elem , n0_qdp )
+       call t_stopf("copy_qdp_h2d")
 #endif
 
-    if (.not. independent_time_steps) then
       if (.not. single_column) then 
 
         ! Loop over rsplit vertically lagrangian timesiteps
@@ -1893,13 +1905,32 @@ contains
 
     real(kind=real_kind) :: dt_q, dt_remap, dp(np,np,nlev)
     integer :: ie, q, k, n, n0_qdp, np1_qdp
-    logical :: compute_diagnostics_it
+    logical :: compute_diagnostics_it, apply_forcing
 
     dt_q = dt*dt_tracer_factor
     if (dt_remap_factor == 0) then
        dt_remap = dt
     else
        dt_remap = dt*dt_remap_factor
+    end if
+
+    call TimeLevel_Qdp(tl, dt_tracer_factor, n0_qdp, np1_qdp)
+
+#ifndef CAM
+    ! Compute test forcing over tracer time step.
+    call compute_test_forcing(elem,hybrid,hvcoord,tl%n0,n0_qdp,dt_q,nets,nete,tl)
+#endif
+
+#ifdef CAM
+    apply_forcing = ftype == 0
+#else
+    apply_forcing = ftype == 0 .or. ftype == 2 .or. ftype == 4
+#endif
+    if (apply_forcing) then
+       ! Apply tracer forcings over tracer time step.
+       do ie = nets,nete
+          call ApplyCAMForcing_tracers(elem(ie),hvcoord,tl%n0,n0_qdp,dt_q,.false.)
+       enddo
     end if
 
     call set_tracer_transport_derived_values(elem, nets, nete, tl)
@@ -1915,6 +1946,18 @@ contains
           ! diagnostics will be incorrect
           call ApplyCAMforcing_dynamics(elem,hvcoord,tl%n0,dt,nets,nete)
           if (compute_diagnostics_it) call run_diagnostics(elem,hvcoord,tl,1,.true.,nets,nete)
+       else if (ftype == 2 .or. ftype == 0) then
+          ! Apply dynamics forcing over the dynamics (vertically Eulerian) or
+          ! vertical remap time step if we're at reference levels.
+          if (dt_remap_factor > 0) then
+             apply_forcing = modulo(n-1, dt_remap_factor) == 0
+          else
+             apply_forcing = .true.
+          end if
+          if (apply_forcing) then
+             call ApplyCAMforcing_dynamics(elem,hvcoord,tl%n0,dt_remap,nets,nete)
+             if (compute_diagnostics_it) call run_diagnostics(elem,hvcoord,tl,1,.true.,nets,nete)
+          end if
        end if
 
        call prim_advance_exp(elem, deriv1, hvcoord, hybrid, dt, tl, nets, nete, &
@@ -2061,6 +2104,7 @@ contains
     enddo
 #endif
   endif
+
   call t_stopf("ApplyCAMForcing_remap")
   end subroutine applyCAMforcing_remap
 
@@ -2101,6 +2145,9 @@ contains
   use physical_constants, only : cp, g, kappa, Rgas, p0
   use element_ops,        only : get_temperature, get_r_star, get_hydro_pressure
   use eos,                only : pnh_and_exner_from_eos
+#ifdef HOMMEXX_BFB_TESTING
+  use bfb_mod,            only : bfb_pow
+#endif
 #endif
   implicit none
   type (element_t),       intent(inout) :: elem
@@ -2247,7 +2294,11 @@ contains
       endif
       do k=1,nlev
          pnh(:,:,k)=phydro(:,:,k) + pprime(:,:,k)
+#ifdef HOMMEXX_BFB_TESTING
+         exner(:,:,k)=bfb_pow(pnh(:,:,k)/p0,Rgas/Cp)
+#else
          exner(:,:,k)=(pnh(:,:,k)/p0)**(Rgas/Cp)
+#endif
       enddo
    endif
    
@@ -2273,8 +2324,6 @@ contains
         (phi_n1 - elem%state%phinh_i(:,:,:,np1))/dt
    
 #endif
-     
-
 
   end subroutine applyCAMforcing_tracers
   
@@ -2397,7 +2446,7 @@ contains
 
 
     subroutine smooth_topo_datasets(elem,hybrid,nets,nete)
-    use control_mod, only : smooth_phis_numcycle
+    use control_mod, only : smooth_phis_numcycle, smooth_phis_nudt
     use hybrid_mod, only : hybrid_t
     use bndry_mod, only : bndry_exchangev
     use derivative_mod, only : derivative_t , laplace_sphere_wk
@@ -2417,8 +2466,11 @@ contains
     enddo
     
     minf=-9e9
-    if (hybrid%masterthread) &
+    if (hybrid%masterthread) then
        write(iulog,*) "Applying hyperviscosity smoother to PHIS"
+       write(iulog,'(a,i10)')  " smooth_phis_numcycle =",smooth_phis_numcycle
+       write(iulog,'(a,e13.5)')" smooth_phis_nudt =",smooth_phis_nudt
+    endif
     call smooth_phis(phis,elem,hybrid,deriv1,nets,nete,minf,smooth_phis_numcycle)
 
 
