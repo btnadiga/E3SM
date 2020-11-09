@@ -1163,148 +1163,134 @@ contains
     ! compute scalar diagnostics if currently active
     if (compute_diagnostics) call run_diagnostics(elem,hvcoord,tl,3,.true.,nets,nete)
 
-!<<<<<<< HEAD
-    !call TimeLevel_Qdp(tl, qsplit, n0_qdp, np1_qdp)
-    call TimeLevel_Qdp(tl, dt_tracer_factor, n0_qdp, np1_qdp)
+    if (.not. independent_time_steps) then
 
-    ! DSXM
-    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then 
-      print *, 'PRS01TLacmp dyTmLv nm1= ', tl%nm1
-      print *, 'PRS01TLacmp dyTmLv n0= ',  tl%n0
-      print *, 'PRS01TLacmp dyTmLv np1= ', tl%np1 
-      print *, 'PRS01TL tmLvQdp n0_qdp=',  n0_qdp
-      print *, 'PRS01TL tmLvQdp np1_qdp=', np1_qdp
-    end if
-    ! DSXM
+       !call TimeLevel_Qdp(tl, qsplit, n0_qdp, np1_qdp)
+       call TimeLevel_Qdp(tl, dt_tracer_factor, n0_qdp, np1_qdp)
 
-    ! ASXM (BEG)
-    !+++++++++++++++++++++++++++++++++++++++
-    ! PM Section 01: Record nm1 Values (BEG)
-    !+++++++++++++++++++++++++++++++++++++++
-    ! 1. For PM, we only need to do this at nstep=0 and record the IC in equilibrium to calculate PM forcing.
-    ! 2. For steady model solutions, we need to
-    !   1) do this at each nstep for "direct" steady model solutions (not a strict steady model solution verification, not taken)
-    !   2) but only at nstep=0 for steady model solutions realized by adding back the calculated PM forcing (a strict steady model solution verification, taken).
-    ! 3. Specifically,
-    !   1) for fields with timelevels=3, we raised their timelevels to 4, and used the 4th timelevel to record their values at the end of the previous nstep as indicated by nm1.
-    !   2) for Qdp, which has timelevels=2, we raised the timelevels to 3, and used the 3rd timelevel to record its value at the end of the previous nstep as indicated by n0_qdp.
-    !   3) for Q, it does not have a timelevel-dimension.
-    !     a) we can introduce a time dimension for Q with timelevels=2, and use the 2nd timelevel to record the Q value in the previous nstep.
-    !       A) This approach, however, is not taken, because it will require modifications across the entire model as the dimension of Q is increased from (np,np,nlev,qsize_d) to (np,np,nlev,qsize_d,2).
-    !     b) instead, we did not change Q and introduced the field prvQ to reord Q values in the previous nstep (prvQ has the same dimensions as Q).
-    ! 4. Note that at early time, we did "PM Section 01" in subroutine prim_advance_exp (prim_advance_mod.F90) by introducing subroutine compute_andor_apply_rhs_saveNM1 therein.
-    !  1) this approach worked well for hydrostat-dry simulations,
-    !  2) but it was found hard to do the same operations for non-hydrostatic simulations (at least), because nm1 is not avaiable in the first call to compute_andor_apply_rhs_saveNM1 (tstep_type=7). 
-    !    a) One can try to pass nm1 values there, but trouble and messy.
-    !  3) for wet simulations, it is also not a good idea to do "PM Section 01" in subroutine prim_advance_exp (prim_advance_mod.F90), as the nm1 Q has been partially modified/updated before reaching there.
-    !  4) doing "PM Section 01" here, the nm1 Q is readliy avaiable, and we do not need to worry about dry/wet and hydrostatic/nonhydrostatic.
-    !  5) the statment in 4) was verified by relevant steady model solutions for all combinations of dry/wet and hydrostatic/nonhydrsotatic configurations.
+       ! DSXM
+       if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then 
+          print *, 'PRS01TLacmp dyTmLv nm1= ', tl%nm1
+          print *, 'PRS01TLacmp dyTmLv n0= ',  tl%n0
+          print *, 'PRS01TLacmp dyTmLv np1= ', tl%np1 
+          print *, 'PRS01TL tmLvQdp n0_qdp=',  n0_qdp
+          print *, 'PRS01TL tmLvQdp np1_qdp=', np1_qdp
+       end if
+       ! DSXM
+       
+       ! ASXM (BEG)
+       !+++++++++++++++++++++++++++++++++++++++
+       ! PM Section 01: Record nm1 Values (BEG)
+       !+++++++++++++++++++++++++++++++++++++++
+       ! 1. For PM, we only need to do this at nstep=0 and record the IC in equilibrium to calculate PM forcing.
+       ! 2. For steady model solutions, we need to
+       !   1) do this at each nstep for "direct" steady model solutions (not a strict steady model solution verification, not taken)
+       !   2) but only at nstep=0 for steady model solutions realized by adding back the calculated PM forcing (a strict steady model solution verification, taken).
+       ! 3. Specifically,
+       !   1) for fields with timelevels=3, we raised their timelevels to 4, and used the 4th timelevel to record their values at the end of the previous nstep as indicated by nm1.
+       !   2) for Qdp, which has timelevels=2, we raised the timelevels to 3, and used the 3rd timelevel to record its value at the end of the previous nstep as indicated by n0_qdp.
+       !   3) for Q, it does not have a timelevel-dimension.
+       !     a) we can introduce a time dimension for Q with timelevels=2, and use the 2nd timelevel to record the Q value in the previous nstep.
+       !       A) This approach, however, is not taken, because it will require modifications across the entire model as the dimension of Q is increased from (np,np,nlev,qsize_d) to (np,np,nlev,qsize_d,2).
+       !     b) instead, we did not change Q and introduced the field prvQ to reord Q values in the previous nstep (prvQ has the same dimensions as Q).
+       ! 4. Note that at early time, we did "PM Section 01" in subroutine prim_advance_exp (prim_advance_mod.F90) by introducing subroutine compute_andor_apply_rhs_saveNM1 therein.
+       !  1) this approach worked well for hydrostat-dry simulations,
+       !  2) but it was found hard to do the same operations for non-hydrostatic simulations (at least), because nm1 is not avaiable in the first call to compute_andor_apply_rhs_saveNM1 (tstep_type=7). 
+       !    a) One can try to pass nm1 values there, but trouble and messy.
+       !  3) for wet simulations, it is also not a good idea to do "PM Section 01" in subroutine prim_advance_exp (prim_advance_mod.F90), as the nm1 Q has been partially modified/updated before reaching there.
+       !  4) doing "PM Section 01" here, the nm1 Q is readliy avaiable, and we do not need to worry about dry/wet and hydrostatic/nonhydrostatic.
+       !  5) the statment in 4) was verified by relevant steady model solutions for all combinations of dry/wet and hydrostatic/nonhydrsotatic configurations.
 
-    ! DSXM
-    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then 
-      print *, 'PRSB nstep=',             tl%nstep
-      print *, 'PRSB recording n0=',      tl%n0
-      print *, 'PRSB recording nm1=',     tl%nm1
-      print *, 'PRSB recording np1=',     tl%np1
-      print *, 'PRSB recording n0_qdp=',  n0_qdp
-      print *, 'PRSB recording np1_qdp=', np1_qdp
-    end if
-    ! DSXM
+       ! DSXM
+       if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) then 
+          print *, 'PRSB nstep=',             tl%nstep
+          print *, 'PRSB recording n0=',      tl%n0
+          print *, 'PRSB recording nm1=',     tl%nm1
+          print *, 'PRSB recording np1=',     tl%np1
+          print *, 'PRSB recording n0_qdp=',  n0_qdp
+          print *, 'PRSB recording np1_qdp=', np1_qdp
+       end if
+       ! DSXM
+       
+       do ie = nets, nete
+          ! Step01: Process levels 1 to nlev
+          do k = 1, nlev
+             elem(ie)%state%v(:,:,1,k,4)           = elem(ie)%state%v(:,:,1,k,tl%nm1)
+             elem(ie)%state%v(:,:,2,k,4)           = elem(ie)%state%v(:,:,2,k,tl%nm1)
+             elem(ie)%state%w_i(:,:,k,4)           = elem(ie)%state%w_i(:,:,k,tl%nm1)
+             ! elem(ie)%state%theta_dp_cp(:,:,k,4) = elem(ie)%state%theta_dp_cp(:,:,k,tl%nm1) ! commented out by SXM (MSXM, GitHub Mar2020)
+             elem(ie)%state%vtheta_dp(:,:,k,4)     = elem(ie)%state%vtheta_dp(:,:,k,tl%nm1)   ! added by SXM (ASXM, GitHub Mar2020)
+             elem(ie)%state%phinh_i(:,:,k,4)       = elem(ie)%state%phinh_i(:,:,k,tl%nm1)
+             if(PM_dp3d) then
+                elem(ie)%state%dp3d(:,:,k,4)        = elem(ie)%state%dp3d(:,:,k,tl%nm1)
+             end if
+             if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
+                if(PM_ps_v) then
+                   elem(ie)%state%ps_v(:,:,4)        = elem(ie)%state%ps_v(:,:,tl%nm1)
+                end if
+             end if
+             if(PM_Qdp) then
+                elem(ie)%state%Qdp(:,:,k,:,3)       = elem(ie)%state%Qdp(:,:,k,:,n0_qdp)
+             end if
+             if(PM_Q) then
+                elem(ie)%state%prvQ(:,:,k,:)        = elem(ie)%state%Q(:,:,k,:)
+             end if
+          end do ! k-loop
+          
+          ! Step02: Process the lowest interface nlevp
+          k = nlevp
+          elem(ie)%state%w_i(:,:,k,4)           = elem(ie)%state%w_i(:,:,k,tl%nm1)
+          elem(ie)%state%phinh_i(:,:,k,4)       = elem(ie)%state%phinh_i(:,:,k,tl%nm1)  
+       end do
+       !+++++++++++++++++++++++++++++++++++++++
+       ! PM Section 01: Record nm1 Values (END)
+       !+++++++++++++++++++++++++++++++++++++++
+       
+       !++++++++++++++++++++++++++++++++++++++++++
+       ! PM Section 02: Add IC Perturbations (BEG)
+       !++++++++++++++++++++++++++++++++++++++++++
+       ! 1. Rather than introducing IC perturbations in dcmip2016-baroclinic.F90 as in the standard HM.BNBW, it is added here, such that
+       !   1) the PM gets the IC in equilibrium without perturbations to calculate PM forcings ("PM Section 01").
+       !   2) the model still gets the IC perturbations for BW simulations.
+       ! 2. At earlier time (prim_driver_base_PM_04ICPertMovedNotNeat.F90), we
+       !   1) removed BW IC perturbations in dcmip2016-baroclinic.F90
+       !   2) and introduced IC perturbations here, but did not adjust other fields coupled/related to the IC perturbations.
+       ! 3. However, the IC perturbations are actually coupled with other fields, 
+       !   1) the generated IC+perturbations by 2. is thus different with the standard HM.BNBW, although the difference is minimal.
+       !   2) we can bring here more details to adjust other fields coupled/related to the IC perturbations, but it is 
+       !     a) trouble
+       !     b) messy 
+       !     c) and non-flexible (need to mannually change code here or add additional namelist options when changing configurations)
+       ! 4. Instead, we
+       !   1) added subroutine baroclinic_wave_test_wopertIC in dcmip2016-baroclinic.F90
+       !   2) added subroutine dcmip2016_test1_wopertIC in dcmip16_wrapper.F90
+       !   3) rather than calling subroutine dcmip2016_test1 in subroutine set_test_initial_conditions (test_mod.F90), we called subroutine dcmip2016_test1_wopertIC there.
+       !   4) 1)-3) thus initialize the model as no perturbations are in the IC (equilibrium state), such that the "PM Section 01" can record this equilibrium IC for the calculation of PM forcings.
+       !   5) in the following, we re-call the default subroutine dcmip2016_test1 to "re-initialize" the model such that the model get the IC+perturbations for the rest of model integrations.
+       ! 5. Relevant experiments demonstrated that this approach produces BFB results to the standard HM.BNBW runs.
+       ! 6. Relevant call graph in the standard HM.BNBW is 
+       !   1) prim_init2 (prim_driver_base.F90) --> set_test_initial_conditions (test_mod.F90) --> dcmip2016_test1 (dcmip16_wrapper.F90) --> baroclinic_wave_test (within ie,k,j,i loops); set_elem_state (after ie,k,j,i loops) (dcmip2016-baroclinic.F90)
+       if(pertIC .and. tl%nstep==0) then
+          call dcmip2016_test1(elem, hybrid, hvcoord, nets, nete) ! this subroutine dcmip2016_test1 only conducts initialization
+       end if
+       !++++++++++++++++++++++++++++++++++++++++++
+       ! PM Section 02: Add IC Perturbations (END)
+       !++++++++++++++++++++++++++++++++++++++++++
+       ! ASXM (END)
 
-    do ie = nets, nete
-      ! Step01: Process levels 1 to nlev
-      do k = 1, nlev
-        elem(ie)%state%v(:,:,1,k,4)           = elem(ie)%state%v(:,:,1,k,tl%nm1)
-        elem(ie)%state%v(:,:,2,k,4)           = elem(ie)%state%v(:,:,2,k,tl%nm1)
-        elem(ie)%state%w_i(:,:,k,4)           = elem(ie)%state%w_i(:,:,k,tl%nm1)
-        ! elem(ie)%state%theta_dp_cp(:,:,k,4) = elem(ie)%state%theta_dp_cp(:,:,k,tl%nm1) ! commented out by SXM (MSXM, GitHub Mar2020)
-        elem(ie)%state%vtheta_dp(:,:,k,4)     = elem(ie)%state%vtheta_dp(:,:,k,tl%nm1)   ! added by SXM (ASXM, GitHub Mar2020)
-        elem(ie)%state%phinh_i(:,:,k,4)       = elem(ie)%state%phinh_i(:,:,k,tl%nm1)
-        if(PM_dp3d) then
-          elem(ie)%state%dp3d(:,:,k,4)        = elem(ie)%state%dp3d(:,:,k,tl%nm1)
-        end if
-        if(k == nlev) then ! 2D var only needs to PM once at k=nlev (equivalent to k=nlevp)
-          if(PM_ps_v) then
-            elem(ie)%state%ps_v(:,:,4)        = elem(ie)%state%ps_v(:,:,tl%nm1)
-          end if
-        end if
-        if(PM_Qdp) then
-          elem(ie)%state%Qdp(:,:,k,:,3)       = elem(ie)%state%Qdp(:,:,k,:,n0_qdp)
-        end if
-        if(PM_Q) then
-          elem(ie)%state%prvQ(:,:,k,:)        = elem(ie)%state%Q(:,:,k,:)
-        end if
-      end do ! k-loop
-
-      ! Step02: Process the lowest interface nlevp
-      k = nlevp
-      elem(ie)%state%w_i(:,:,k,4)           = elem(ie)%state%w_i(:,:,k,tl%nm1)
-      elem(ie)%state%phinh_i(:,:,k,4)       = elem(ie)%state%phinh_i(:,:,k,tl%nm1)  
-    end do
-    !+++++++++++++++++++++++++++++++++++++++
-    ! PM Section 01: Record nm1 Values (END)
-    !+++++++++++++++++++++++++++++++++++++++
-
-    !++++++++++++++++++++++++++++++++++++++++++
-    ! PM Section 02: Add IC Perturbations (BEG)
-    !++++++++++++++++++++++++++++++++++++++++++
-    ! 1. Rather than introducing IC perturbations in dcmip2016-baroclinic.F90 as in the standard HM.BNBW, it is added here, such that
-    !   1) the PM gets the IC in equilibrium without perturbations to calculate PM forcings ("PM Section 01").
-    !   2) the model still gets the IC perturbations for BW simulations.
-    ! 2. At earlier time (prim_driver_base_PM_04ICPertMovedNotNeat.F90), we
-    !   1) removed BW IC perturbations in dcmip2016-baroclinic.F90
-    !   2) and introduced IC perturbations here, but did not adjust other fields coupled/related to the IC perturbations.
-    ! 3. However, the IC perturbations are actually coupled with other fields, 
-    !   1) the generated IC+perturbations by 2. is thus different with the standard HM.BNBW, although the difference is minimal.
-    !   2) we can bring here more details to adjust other fields coupled/related to the IC perturbations, but it is 
-    !     a) trouble
-    !     b) messy 
-    !     c) and non-flexible (need to mannually change code here or add additional namelist options when changing configurations)
-    ! 4. Instead, we
-    !   1) added subroutine baroclinic_wave_test_wopertIC in dcmip2016-baroclinic.F90
-    !   2) added subroutine dcmip2016_test1_wopertIC in dcmip16_wrapper.F90
-    !   3) rather than calling subroutine dcmip2016_test1 in subroutine set_test_initial_conditions (test_mod.F90), we called subroutine dcmip2016_test1_wopertIC there.
-    !   4) 1)-3) thus initialize the model as no perturbations are in the IC (equilibrium state), such that the "PM Section 01" can record this equilibrium IC for the calculation of PM forcings.
-    !   5) in the following, we re-call the default subroutine dcmip2016_test1 to "re-initialize" the model such that the model get the IC+perturbations for the rest of model integrations.
-    ! 5. Relevant experiments demonstrated that this approach produces BFB results to the standard HM.BNBW runs.
-    ! 6. Relevant call graph in the standard HM.BNBW is 
-    !   1) prim_init2 (prim_driver_base.F90) --> set_test_initial_conditions (test_mod.F90) --> dcmip2016_test1 (dcmip16_wrapper.F90) --> baroclinic_wave_test (within ie,k,j,i loops); set_elem_state (after ie,k,j,i loops) (dcmip2016-baroclinic.F90)
-    if(pertIC .and. tl%nstep==0) then
-      call dcmip2016_test1(elem, hybrid, hvcoord, nets, nete) ! this subroutine dcmip2016_test1 only conducts initialization
-    end if
-    !++++++++++++++++++++++++++++++++++++++++++
-    ! PM Section 02: Add IC Perturbations (END)
-    !++++++++++++++++++++++++++++++++++++++++++
-    ! ASXM (END)
-
-    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) print *, 'PRS: HOMME test case forcing not yet applied; will notify in the next if does' ! DSXM
-
+       if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) print *, 'PRS: HOMME test case forcing not yet applied; will notify in the next if does' ! DSXM
+       
 #ifndef CAM
-    ! compute HOMME test case forcing
-    ! by calling it here, it mimics eam forcings computations in standalone
-    ! homme.
-    call compute_test_forcing(elem,hybrid,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete,tl)
-    if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) print *, 'PRS: HOMME test case forcing applied' ! DSXM
-#endif
-
-    ! For dry hydrostatic BW, ftype = 0 (CSXM)
-    ! if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) print *, 'PRS: ftype=', ftype ! DSXM      
-    call applyCAMforcing_remap(elem,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete)
-!!!!!=======
-
-!    if (.not. independent_time_steps) then
-!       call TimeLevel_Qdp(tl, dt_tracer_factor, n0_qdp, np1_qdp)
-
-!#ifndef CAM
        ! compute HOMME test case forcing
        ! by calling it here, it mimics eam forcings computations in standalone
        ! homme.
-!       call compute_test_forcing(elem,hybrid,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete,tl)
-!#endif
-
-!       call applyCAMforcing_remap(elem,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete)
-
-!!!!>>>>>>> MAIN/master
+       call compute_test_forcing(elem,hybrid,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete,tl)
+       if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) print *, 'PRS: HOMME test case forcing applied' ! DSXM
+#endif
+       
+       ! For dry hydrostatic BW, ftype = 0 (CSXM)
+       ! if(PM_debug .GE. 10 .and. tl%nstep .LE. 6 .and. hybrid%masterthread) print *, 'PRS: ftype=', ftype ! DSXM      
+       call applyCAMforcing_remap(elem,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete)
 
        ! E(1) Energy after CAM forcing
        if (compute_diagnostics) call run_diagnostics(elem,hvcoord,tl,1,.true.,nets,nete)
